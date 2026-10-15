@@ -1,26 +1,11 @@
+import { memoryScope } from "@/lib/memory-session";
+import { profileSchema } from "@/lib/profile-schema";
 import { z } from "zod";
 import { runAgent } from "@/lib/agent";
 import { readWallet, saveWallet } from "@/lib/wallet";
 import { catalog, type Profile } from "@/lib/data";
 import { checkPolicy, settle } from "@/lib/policy";
-export const maxDuration = 90;
-const profileSchema = z.object({
-  id: z.string().max(80),
-  name: z.string().min(1).max(80),
-  relation: z.string().max(60),
-  initials: z.string().max(4),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  occasion: z.string().min(1).max(60),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine((v) => !isNaN(Date.parse(v)), "Invalid date"),
-  budget: z.number().int().min(100).max(100000),
-  notes: z.string().min(5).max(3000),
-  dislikes: z.array(z.string().min(1).max(80)).max(20),
-  owned: z.array(z.string().min(1).max(80)).max(20),
-  interests: z.array(z.string().max(80)).max(10),
-});
+export const maxDuration = 120;
 const bodySchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("run"),
@@ -86,7 +71,12 @@ export async function POST(request: Request) {
           },
           { status: 409 },
         );
-      const result = await runAgent(body.profile, body.policy, wallet);
+      const result = await runAgent(
+        body.profile,
+        body.policy,
+        wallet,
+        await memoryScope(),
+      );
       wallet.runs++;
       await saveWallet(wallet);
       return Response.json({ result, wallet });

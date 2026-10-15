@@ -52,3 +52,17 @@ vercel --prod
 ```
 
 The key must be valid and funded for live AI calls. Provider failures leave the wallet unchanged and show a retryable error.
+
+## Cognee people memory
+
+Set `COGNEE_API_KEY` in `.env.local` (server only). `COGNEE_API_URL` defaults to `https://api.cognee.ai`. Configure the same variables in your hosting environment when deploying.
+
+Open Your people, edit Sophie (the girlfriend example), add a birthday or address, and edit her details. Valid changes save automatically after a short typing pause; the app also syncs existing people when it loads. The app uploads a timestamped snapshot of her details to Cognee and queues graph indexing. The editor and page report sync status. Failed requests retain the browser copy and retry automatically after 15 seconds. Unchanged profiles are skipped during the session, and uploads run sequentially to preserve browser memory scope. Incomplete profiles are not uploaded until required fields are valid. Use Done to close the editor; saving does not require this button.
+
+Gift runs retrieve memory from that person's dataset; current profile details override older snapshots. History is append-only: edits add a new snapshot rather than deleting old personal details. Indexing runs asynchronously, so new facts may not appear in search immediately. Cloud records can be managed in Cognee.
+
+Each browser has a random HTTP-only memory cookie and each person a separate dataset. Dataset scope is derived on the server, never accepted from the client. This demo has no account login or cross-device recovery: clearing the cookie loses access through this app, but does not delete Cognee records. The editable profile list still loads from browser storage.
+
+API contract: [Cognee REST documentation](https://docs.cognee.ai/api-reference/introduction). No additional SDK dependency is required.
+
+Run the isolated memory contract check with `npx tsx --test tests/cognee.test.ts`.

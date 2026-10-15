@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -35,6 +35,7 @@ import {
   type AgentResult,
   type Receipt,
 } from "@/lib/data";
+import { prepareProfile } from "@/lib/profile-schema";
 type View =
   "overview" | "people" | "occasions" | "activity" | "wallet" | "settings";
 const nav = [
@@ -232,11 +233,70 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [editing, setEditing] = useState<Profile | null>(null);
+  const [editing, setEditingState] = useState<Profile | null>(null);
   const [showAgent, setShowAgent] = useState(false);
   const [ready, setReady] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [help, setHelp] = useState(false);
+  const [savingPerson, setSavingPerson] = useState(false);
+  const [memoryStatus, setMemoryStatus] = useState("");
+  const syncedPeople = useRef(new Map<string, string>());
+  const syncing = useRef(false);
+  const [retryAt, setRetryAt] = useState(0);
+  function setEditing(profile: Profile | null) {
+    setEditingState(profile);
+    if (!profile) return;
+    const valid = prepareProfile(profile);
+    if (!valid) return;
+    setPeople((old) =>
+      old.some((p) => p.id === valid.id)
+        ? old.map((p) => (p.id === valid.id ? valid : p))
+        : [...old, valid],
+    );
+  }
+  useEffect(() => {
+    if (!ready || savingPerson || syncing.current) return;
+    const pending = people
+      .map(prepareProfile)
+      .filter(
+        (p): p is Profile =>
+          p !== null && syncedPeople.current.get(p.id) !== JSON.stringify(p),
+      );
+    if (!pending.length) return;
+    const timer = setTimeout(
+      async () => {
+        if (syncing.current) return;
+        syncing.current = true;
+        setSavingPerson(true);
+        setMemoryStatus("Saving details to Cognee...");
+        try {
+          // Serialize first saves so they share the same HTTP-only memory cookie.
+          for (const profile of pending) {
+            const response = await fetch("/api/people", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "save", profile }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
+            syncedPeople.current.set(profile.id, JSON.stringify(profile));
+            setMemoryStatus(data.message);
+          }
+        } catch (error) {
+          setMemoryStatus(
+            `Saved in this browser. ${error instanceof Error ? error.message : "Cognee sync failed."} Retrying automatically in 15 seconds.`,
+          );
+          setRetryAt(Date.now() + 15000);
+        } finally {
+          syncing.current = false;
+          setSavingPerson(false);
+        }
+      },
+      Math.max(1200, retryAt - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [people, ready, savingPerson, retryAt]);
+
   useEffect(() => {
     async function initialize() {
       await Promise.resolve();
@@ -413,6 +473,7 @@ export default function Home() {
     }
   }
   function newPerson() {
+    setMemoryStatus("");
     setEditing({
       id: crypto.randomUUID(),
       name: "",
@@ -623,6 +684,10 @@ export default function Home() {
               </button>
             )}
           </div>
+          <p role="status">
+            {memoryStatus ||
+              "People and their details save automatically to Cognee memory."}
+          </p>
           {error && (
             <div role="alert" className="error-banner">
               {error}
@@ -777,7 +842,10 @@ export default function Home() {
                       </div>
                       <button
                         className="icon-button edit-person"
-                        onClick={() => setEditing({ ...p })}
+                        onClick={() => {
+                          setMemoryStatus("");
+                          setEditing({ ...p });
+                        }}
                         aria-label={`Edit ${p.name}`}
                       >
                         <Pencil size={15} />
@@ -1286,7 +1354,12 @@ export default function Home() {
         </div>
       )}
       {editing && (
-        <div className="overlay modal-overlay" onClick={() => setEditing(null)}>
+        <div
+          className="overlay modal-overlay"
+          onClick={() => {
+            setEditing(null);
+          }}
+        >
           <section
             className="profile-modal"
             role="dialog"
@@ -1299,37 +1372,20 @@ export default function Home() {
               <button
                 className="icon-button"
                 aria-label="Close profile"
-                onClick={() => setEditing(null)}
+                onClick={() => {
+                  setEditing(null);
+                }}
               >
                 <X size={20} />
               </button>
             </div>
             <h2 id="profile-title">Tell us their little things.</h2>
             <form
+              aria-busy={savingPerson}
               onSubmit={(e) => {
                 e.preventDefault();
-                const p = {
-                  ...editing,
-                  dislikes: editing.dislikes
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-                  owned: editing.owned.map((x) => x.trim()).filter(Boolean),
-                  interests: editing.interests
-                    .map((x) => x.trim())
-                    .filter(Boolean),
-                  initials: editing.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase(),
-                };
-                setPeople((old) =>
-                  old.some((x) => x.id === p.id)
-                    ? old.map((x) => (x.id === p.id ? p : x))
-                    : [...old, p],
-                );
-                setEditing(null);
+                setEditing(editing);
+                setEditingState(null);
               }}
             >
               <div className="form-grid">
@@ -1405,6 +1461,34 @@ export default function Home() {
                   />
                 </label>
               </div>
+              <div className="form-grid">
+                <label>
+                  Birthday (optional)
+                  <input
+                    type="date"
+                    value={editing.birthday || ""}
+                    onChange={(e) =>
+                      setEditing({ ...editing, birthday: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Address (optional)
+                  <textarea
+                    rows={3}
+                    maxLength={500}
+                    autoComplete="off"
+                    value={editing.address || ""}
+                    onChange={(e) =>
+                      setEditing({ ...editing, address: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <p id="memory-status" role="status">
+                {memoryStatus ||
+                  "Details save automatically to Cognee, including any address, once required fields are complete. Each person has a separate memory in this browser session."}
+              </p>
               <label>
                 The things that make them, them
                 <textarea
@@ -1450,10 +1534,14 @@ export default function Home() {
               <div className="form-footer">
                 <span>
                   <ShieldCheck size={14} />
-                  Saved on this browser
+                  Browser copy + Cognee memory
                 </span>
-                <button className="primary" type="submit">
-                  Save their story <ArrowRight size={15} />
+                <button
+                  className="primary"
+                  type="submit"
+                  aria-describedby="memory-status"
+                >
+                  Done <ArrowRight size={15} />
                 </button>
               </div>
             </form>
@@ -1496,10 +1584,14 @@ export default function Home() {
               evidence and spending rules.
             </p>
             <p>
-              This demo saves people and agent notes in this browser, and wallet
-              state in a signed cookie. It is not a real financial ledger.
-              Clearing browser data starts a new demo. No live product search,
-              email reminders, real orders, or Stripe connection is enabled.
+              People are kept in this browser and saved to Cognee automatically
+              as you update their details. Cognee memory informs gift
+              recommendations; indexing may take a little time. Wallet state is
+              kept in a signed cookie. It is not a real financial ledger.
+              Clearing browser data starts a new demo and loses access to its
+              Cognee memory; cloud records remain in Cognee. No live product
+              search, email reminders, real orders, or Stripe connection is
+              enabled.
             </p>
             <button className="primary" onClick={() => setHelp(false)}>
               Lovely, let’s begin <ArrowRight size={15} />
