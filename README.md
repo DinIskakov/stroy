@@ -1,77 +1,77 @@
 # stroy — The art of giving
 
-Live MVP: https://stroy-seven.vercel.app
+[Live app](https://stroy-seven.vercel.app) · [GitHub](https://github.com/DinIskakov/stroy)
 
-The landing page is at `/`; the gifting workspace is at `/app`. All eight demo catalog products have locally hosted photos in `public/images`, with Unsplash image IDs recorded in `credits.json`. These photos illustrate fictional demo products.
+A personal gift agent built with Next.js, Vercel AI SDK, OpenAI, Tavily, Cognee, and Stripe. Start with Alex (best friend), Sophie (girlfriend), or your own recipient. The agent explains its choices, follows your spending policy, and either pays within its mandate or asks for approval.
 
-A thoughtful gifting concierge built with Next.js, Vercel AI SDK, OpenAI, and Tavily. Includes an editable best friend (Alex) and girlfriend (Sophie), a fictional product catalog, a £300 mock wallet, approval flows, and an evidence-based decision log.
+The landing page is `/`; the workspace is `/app`. **Find a gift** opens a large centered popup with animated activity streamed from the actual agent stages. Runs begin only when clicked. There are no subscriptions, scheduled purchases, or automatic occasion triggers.
 
 ## Run locally
 
 ```sh
 npm install
+cp .env.example .env.local
+# Add OPENAI_API_KEY and replace WALLET_SECRET in .env.local.
 npm run dev
 ```
 
-Create `.env.local` with `OPENAI_API_KEY`, a random `WALLET_SECRET` (32+ characters), and `GIFT_RESEARCH_MODE=catalog`. Local development uses the eight demo gifts and makes no Tavily requests, even if a Tavily key is present. Vercel production uses `GIFT_RESEARCH_MODE=web` with server-side `OPENAI_API_KEY` and `TAVILY_API_KEY`. Optionally set `OPENAI_MODEL`; the default is `gpt-4.1-mini`. Keep these values server-side. Never commit secrets.
+The example selects `GIFT_RESEARCH_MODE=catalog`, `PAYMENT_PROVIDER=mock`, and `COGNEE_ENABLED=false` for a local demo. Local gift research uses eight pictured gift selections without Tavily calls. Cognee is disabled locally unless `COGNEE_ENABLED=true` is explicitly set. `OPENAI_MODEL` defaults to `gpt-4.1-mini`.
 
-## Agent flow
+Images are served locally: catalog product illustrations are in `public/images/products`; landing photos are in `public/images`. Live web gift cards also include a matching illustration labelled **Illustrative photo**. These are not verified photographs of a seller’s listing. See the image credit files in those directories.
 
-1. Read the recipient's notes and extract interests with evidence.
-2. Use `discoverGifts` to inspect the demo catalog locally. In production web mode it also searches Tavily for relevant trends and real gift ideas, with source URLs. Generic interest queries exclude recipient name tokens and contact details. Both modes filter mock purchases through spending rules.
-3. Use `presentShortlist` to record cited trends, real web gift ideas and eligible demo gifts. Live links are research-only; wallet purchases remain limited to approved demo catalog items.
-4. Use `purchaseGift` to attempt one mock purchase. Server code enforces spending rules independently of the model.
-5. Automatically purchase below the approval threshold, or queue explicit human approval. Approval rechecks budget, balance, merchant, delivery and duplicate-purchase rules.
+## What the agent does
 
-All amounts use integer pence. The default automatic threshold is £50. Alex's coffee discovery set costs £36 including delivery. Sophie's pottery workshop costs £88 and requires approval under the default policy.
+1. Extract stated and inferred interests from the supplied profile, with supporting evidence. Recall that person’s scoped Cognee memory when enabled.
+2. Inspect eligible gift selections. Production web mode also searches Tavily for trends and real gift ideas, retaining source links and queries. Search queries use generic interests and the budget, rather than the recipient’s identity or full notes.
+3. Present a considered shortlist. Live web finds are **research only**: they cannot become payment destinations.
+4. Recheck the chosen gift in server code. Default policy: £300 spending allowance, £50 automatic limit, recipient budget including delivery, and approved merchants only. Also check funds, availability, dislikes, ownership, delivery estimates, and duplicate occasions.
+5. Pay automatically within the mandate, or wait for explicit approval. Approval rechecks the recorded policy and recipient preference snapshot. A successful receipt records the choice, evidence, and rules passed.
+
+Alex’s example coffee set is £36 including delivery. Sophie’s £88 pottery workshop requires approval under the default £50 limit. These are fictional products and merchants; the app places no real gift orders and promises no real shipping.
+
+## Stripe sandbox
+
+With `PAYMENT_PROVIDER=stripe`, a valid server-side `STRIPE_SECRET_KEY` (`sk_test_…` or `rk_test_…`), and `STRIPE_MERCHANT_ACCOUNTS`, approved purchases create **Stripe Connect sandbox transfers**. Test funds leave the platform’s available GBP balance for a canonical, approved connected merchant account. Live keys are rejected. Stripe failures never silently fall back to mock payments.
+
+`STRIPE_MERCHANT_ACCOUNTS` maps the four catalog merchant names to their sandbox connected account IDs. The agent and profile cannot supply a destination. The setup helper creates test merchant accounts and funds the sandbox when supported:
+
+```sh
+node scripts/setup-stripe-sandbox.mjs
+```
+
+The wallet shows **spending allowance** separately from the actual **Stripe sandbox balance**. Receipts show the transfer ID, Stripe Dashboard link, destination, and available platform balance before/after when retrievable. Failed payments are not labelled paid. An ambiguous result remains processing; **Check payment** retries confirmation using the same transaction idempotency key. Allowance is deducted only once a payment is confirmed. No live money or real merchant checkout is involved.
+
+## Cognee memory
+
+Production enables Cognee when `COGNEE_API_KEY` is configured unless `COGNEE_ENABLED=false`. Locally, opt in with `COGNEE_ENABLED=true`; `COGNEE_API_URL` defaults to `https://api.cognee.ai`.
+
+Valid profile edits autosave after a typing pause. Enabled Cognee stores timestamped snapshots and indexes them asynchronously; gift runs recall the person’s scoped dataset. Current profile details override older memory. Failed sync retains the browser copy and reports its status. Each browser has an HTTP-only memory scope; each person has a separate dataset. Clearing the browser cookie loses this app’s access to that scope but does not delete cloud records. Profile saving does not launch gift research or spending.
+
+## Deploy from GitHub
+
+The Vercel project is connected to this repository: pushes to `main` trigger production deployments. Configure secrets in Vercel’s project environment settings, then deploy the corresponding GitHub commit.
+
+- Required: `OPENAI_API_KEY`, `WALLET_SECRET`.
+- Production research: `GIFT_RESEARCH_MODE=web`, `TAVILY_API_KEY`.
+- Sandbox payments: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_MERCHANT_ACCOUNTS`.
+- Optional memory: `COGNEE_API_KEY`; enable explicitly with `COGNEE_ENABLED=true` or use the production default.
+
+All keys remain server-side. Never commit `.env.local`.
 
 ## Validation
 
 ```sh
 npm run lint
 npm run build
-npx tsx --test tests/policy.test.ts tests/research.test.ts
-# Requires the dev server and a valid OpenAI key; consumes a small amount of API credit:
+npx tsx --test tests/policy.test.ts tests/research.test.ts tests/cognee.test.ts tests/payments.test.ts
+# Running integration tests uses OpenAI credit and the configured payment provider.
 npx tsx tests/agent.integration.ts
-# Production verifies live Tavily research:
+# Production also exercises live Tavily research and configured sandbox transfers:
 TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 ```
 
-## Demo boundaries
+## MVP limits
 
-- Tavily research is live. Returned web snippets can inspire gift ideas, with source links and retrieval timestamps. Prices, stock and delivery are not verified. A recent article is not proof that something is trending.
-- Mock purchases use fictional catalog products, merchants, prices and delivery estimates. No Stripe integration, real orders, or emails are enabled.
-- A missing/failed Tavily search shows an unavailable/partial state; the agent can continue with the demo catalog.
-- Profiles and agent results are saved in browser localStorage. Wallet state uses a signed, compressed HTTP-only cookie. The wallet retains six recent receipts; clearing browser data creates a fresh demo.
-- This is a single-browser demonstration, not a transactional financial ledger. Signed cookies prevent editing amounts but cannot prevent replay or concurrent snapshots across tabs. Production requires an authenticated database, atomic debits, durable idempotency, and distributed rate limits before real money is introduced.
-- Twenty AI runs per wallet session bound normal demo use; this is not an abuse-resistant public API quota.
-- Free-text profile notes are treated as untrusted data. Structured dislikes and owned items receive deterministic checks; semantic suitability remains the agent's judgment.
-- Evidence and fit ratings are model-generated explanations, not verified facts or calibrated probabilities.
+Profiles and results persist in localStorage; a signed HTTP-only cookie stores the allowance and six recent receipts. This browser-scoped state is not a durable financial ledger and cannot prevent cookie replay or concurrent snapshots. Stripe idempotency protects retries of the same receipt, not separately created receipts from replayed sessions. Real funds require authentication, durable records, atomic spending controls, and complete occasion history.
 
-## Deploy
-
-```sh
-vercel link
-vercel env add OPENAI_API_KEY production
-vercel env add TAVILY_API_KEY production
-# Set this to web:
-vercel env add GIFT_RESEARCH_MODE production
-vercel env add WALLET_SECRET production
-vercel --prod
-```
-
-The key must be valid and funded for live AI calls. Provider failures leave the wallet unchanged and show a retryable error.
-
-## Cognee people memory
-
-Set `COGNEE_API_KEY` in `.env.local` (server only). `COGNEE_API_URL` defaults to `https://api.cognee.ai`. Configure the same variables in your hosting environment when deploying.
-
-Open Your people, edit Sophie (the girlfriend example), add a birthday or address, and edit her details. Valid changes save automatically after a short typing pause; the app also syncs existing people when it loads. The app uploads a timestamped snapshot of her details to Cognee and queues graph indexing. The editor and page report sync status. Failed requests retain the browser copy and retry automatically after 15 seconds. Unchanged profiles are skipped during the session, and uploads run sequentially to preserve browser memory scope. Incomplete profiles are not uploaded until required fields are valid. Use Done to close the editor; saving does not require this button.
-
-Gift runs retrieve memory from that person's dataset; current profile details override older snapshots. History is append-only: edits add a new snapshot rather than deleting old personal details. Indexing runs asynchronously, so new facts may not appear in search immediately. Cloud records can be managed in Cognee.
-
-Each browser has a random HTTP-only memory cookie and each person a separate dataset. Dataset scope is derived on the server, never accepted from the client. This demo has no account login or cross-device recovery: clearing the cookie loses access through this app, but does not delete Cognee records. The editable profile list still loads from browser storage.
-
-API contract: [Cognee REST documentation](https://docs.cognee.ai/api-reference/introduction). No additional SDK dependency is required.
-
-Run the isolated memory contract check with `npx tsx --test tests/cognee.test.ts`.
+Tavily returns snippets, not verified checkout prices, stock, or shipping. Model explanations and fit scores are not verified facts. Structured preference checks use keywords. Twenty completed AI runs per wallet session bound ordinary demo use. There are no real orders, shipping, email reminders, subscriptions, or unattended purchases.
