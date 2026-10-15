@@ -11,13 +11,13 @@ The landing page is `/`; the workspace is `/app`. **Find a gift** opens a large 
 ```sh
 npm install
 cp .env.example .env.local
-# Add OPENAI_API_KEY and replace WALLET_SECRET in .env.local.
+# Add OPENAI_API_KEY and STRIPE_SECRET_KEY; replace WALLET_SECRET in .env.local.
 npm run dev
 ```
 
-The example selects `GIFT_RESEARCH_MODE=catalog`, `PAYMENT_PROVIDER=mock`, and `COGNEE_ENABLED=false` for a local demo. Local gift research uses eight pictured gift selections without Tavily calls. Cognee is disabled locally unless `COGNEE_ENABLED=true` is explicitly set. `OPENAI_MODEL` defaults to `gpt-4.1-mini`.
+The example selects `GIFT_RESEARCH_MODE=catalog`, `PAYMENT_PROVIDER=stripe`, `STRIPE_PAYMENT_FLOW=payout`, `SPENDING_ALLOWANCE_PENCE=34600`, and `COGNEE_ENABLED=false`. The current payment demo is outgoing Stripe sandbox spending, with a £346 gift allowance. Local gift research uses eight pictured gift selections without Tavily calls. Cognee is disabled locally unless `COGNEE_ENABLED=true` is explicitly set. `OPENAI_MODEL` defaults to `gpt-4.1-mini`.
 
-In local mock mode, a successful run shows **Payment complete** with a **Stripe payment demo / SIMULATED** receipt and the demo balance before and after. It makes no Stripe requests and does not invent a Stripe transaction ID.
+For a deliberately offline demo only, set `PAYMENT_PROVIDER=mock`. A successful mock run shows **Payment complete** with a **Stripe payment demo / SIMULATED** receipt and the demo balance before and after. It makes no Stripe requests and does not invent a Stripe transaction ID.
 
 Images are served locally: catalog product illustrations are in `public/images/products`; landing photos are in `public/images`. Live web gift cards also include a matching illustration labelled **Illustrative photo**. These are not verified photographs of a seller’s listing. See the image credit files in those directories.
 
@@ -26,24 +26,26 @@ Images are served locally: catalog product illustrations are in `public/images/p
 1. Extract stated and inferred interests from the supplied profile, with supporting evidence. Recall that person’s scoped Cognee memory when enabled.
 2. Inspect eligible gift selections. Production web mode also searches Tavily for trends and real gift ideas, retaining source links and queries. Search queries use generic interests and the budget, rather than the recipient’s identity or full notes.
 3. Present a considered shortlist. Live web finds are **research only**: they cannot become payment destinations.
-4. Recheck the chosen gift in server code. Default policy: £300 spending allowance, £50 automatic limit, recipient budget including delivery, and approved merchants only. Also check funds, availability, dislikes, ownership, delivery estimates, and duplicate occasions.
+4. Recheck the chosen gift in server code. Demo policy: £346 spending allowance (configured with `SPENDING_ALLOWANCE_PENCE`), £50 automatic limit, recipient budget including delivery, and approved merchants only. Also check funds, availability, dislikes, ownership, delivery estimates, and duplicate occasions.
 5. Pay automatically within the mandate, or wait for explicit approval. Approval rechecks the recorded policy and recipient preference snapshot. A successful receipt records the choice, evidence, and rules passed.
 
 Alex’s example coffee set is £36 including delivery. Sophie’s £88 pottery workshop requires approval under the default £50 limit. These are fictional products and merchants; the app places no real gift orders and promises no real shipping.
 
 ## Stripe sandbox
 
-With `PAYMENT_PROVIDER=stripe`, a valid server-side `STRIPE_SECRET_KEY` (`sk_test_…` or `rk_test_…`), and `STRIPE_MERCHANT_ACCOUNTS`, approved purchases create **Stripe Connect sandbox transfers**. Test funds leave the platform’s available GBP balance for a canonical, approved connected merchant account. Live keys are rejected. Stripe failures never silently fall back to mock payments.
+For outgoing sandbox money movement, set `PAYMENT_PROVIDER=stripe`, `STRIPE_PAYMENT_FLOW=payout`, and a valid server-side `STRIPE_SECRET_KEY` (`sk_test_…` or `rk_test_…`). The account owner must configure an external **GBP test bank account** for the platform through Stripe Dashboard first. The setup helper cannot add the platform’s own bank account through the connected-account API. An approved gift can then create a GBP payout from the platform’s available sandbox balance. This needs no Connect recipient; it does require the platform’s payout destination. Live keys are rejected and failures never silently fall back to mock payments.
 
-`STRIPE_MERCHANT_ACCOUNTS` maps the four catalog merchant names to their sandbox connected account IDs. The agent and profile cannot supply a destination. The setup helper creates test merchant accounts and funds the sandbox when supported:
+The receipt shows the real payout ID (`po_…`), Stripe Dashboard link, and platform GBP balance before/after when retrievable. **This is outgoing movement of existing test funds**, not an incoming test-card charge. Once Stripe confirms a submitted payout and its outgoing balance transaction, the gift allowance is reserved immediately: a £36 payout changes £346 → £310. The receipt remains processing until Stripe reports paid. Confirmation does not deduct a second time; a later failed payout releases the reserved allowance. The Check payout action checks the same receipt without creating another intended payment. Failed or unconfirmed payouts are not labelled complete.
+
+The gift spending allowance is separate from the Stripe account’s actual available balance. The configured allowance of £346 → £310 after a £36 reservation does not prove that Stripe had £346 available: fees, pending funds, and existing payouts can produce different platform balances. The UI must show retrieved balance evidence rather than inventing a round starting balance.
+
+The optional Connect transfer flow uses `STRIPE_PAYMENT_FLOW=transfer` and `STRIPE_MERCHANT_ACCOUNTS`, a server-owned mapping from canonical demo merchants to enabled connected recipients. This also debits available platform GBP and requires an active recipient transfer capability. Its receipt records `tr_…`, destination and balance evidence. The setup helper is only for that optional flow:
 
 ```sh
 node scripts/setup-stripe-sandbox.mjs
 ```
 
-Stripe-managed recipients must finish hosted verification before their `transfers` capability becomes active. The setup uses Stripe’s passing test identity values: **1 January 1902** and phone **0000000000**. If an older recipient failed identity verification, correct it through Stripe’s hosted form; Stripe locks API identity edits after onboarding.
-
-The wallet shows **spending allowance** separately from the actual **Stripe sandbox balance**. Receipts show the transfer ID, Stripe Dashboard link, destination, and available platform balance before/after when retrievable. Failed payments are not labelled paid. An ambiguous result remains processing; **Check payment** retries confirmation using the same transaction idempotency key. Allowance is deducted only once a payment is confirmed. No live money or real merchant checkout is involved.
+No incoming card-charge flow is used to demonstrate outgoing spending. Both supported Stripe paths use test funds only; neither performs a real gift checkout, places an order, or provides shipping. Explicit `PAYMENT_PROVIDER=mock` remains available only for an offline demonstration and creates no Stripe transaction.
 
 ## Cognee memory
 
@@ -57,7 +59,7 @@ The Vercel project is connected to this repository: pushes to `main` trigger pro
 
 - Required: `OPENAI_API_KEY`, `WALLET_SECRET`.
 - Production research: `GIFT_RESEARCH_MODE=web`, `TAVILY_API_KEY`.
-- Sandbox payments: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_MERCHANT_ACCOUNTS`.
+- Sandbox payments: `PAYMENT_PROVIDER=stripe`, `STRIPE_PAYMENT_FLOW=payout`, `STRIPE_SECRET_KEY`. The optional transfer flow additionally requires `STRIPE_MERCHANT_ACCOUNTS`.
 - Optional memory: `COGNEE_API_KEY`; enable explicitly with `COGNEE_ENABLED=true` or use the production default.
 
 All keys remain server-side. Never commit `.env.local`.
@@ -70,7 +72,7 @@ npm run build
 npx tsx --test tests/policy.test.ts tests/research.test.ts tests/cognee.test.ts tests/payments.test.ts
 # Running integration tests uses OpenAI credit and the configured payment provider.
 npx tsx tests/agent.integration.ts
-# Production also exercises live Tavily research and configured sandbox transfers:
+# Production also exercises live Tavily research and configured sandbox payments:
 TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 ```
 

@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { executePayoutPayment } from "./payout-payments";
 import { catalog, type Receipt, type Wallet } from "./data";
 import { settle } from "./policy";
 
@@ -63,12 +64,12 @@ export async function executePayment(
     !product ||
     receipt.total !== product.price + product.shipping ||
     receipt.total <= 0 ||
-    receipt.total > wallet.balance
+    (!receipt.payment?.allowanceDebited && receipt.total > wallet.balance)
   )
     throw new Error(
       "Payment amount does not match the approved gift or available budget.",
     );
-  const provider = paymentProvider();
+  const provider = receipt.payment?.provider || paymentProvider();
   if (provider === "mock")
     return settle(
       {
@@ -87,6 +88,10 @@ export async function executePayment(
   let destination: string;
   try {
     client = sandboxClient();
+    const payoutFlow =
+      receipt.payment?.type === "payout" ||
+      (!receipt.payment?.type && process.env.STRIPE_PAYMENT_FLOW === "payout");
+    if (payoutFlow) return executePayoutPayment(receipt, wallet, client);
     destination = merchantAccounts()[product.merchant];
     if (!destination || !/^acct_[A-Za-z0-9]+$/.test(destination))
       throw new Error(

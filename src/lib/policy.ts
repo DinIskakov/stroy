@@ -74,7 +74,8 @@ export function checkPolicy(
   };
 }
 export function settle(receipt: Receipt, wallet: Wallet) {
-  if (receipt.status === "paid") wallet.balance -= receipt.total;
+  if (receipt.status === "paid" && !receipt.payment?.allowanceDebited)
+    wallet.balance -= receipt.total;
   wallet.receipts = [
     receipt,
     ...wallet.receipts.filter((r) => r.id !== receipt.id),

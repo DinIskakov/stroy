@@ -206,11 +206,14 @@ export type Recommendation = {
 };
 export type Payment = {
   provider: "mock" | "stripe";
-  type?: "transfer" | "payment_intent";
+  type?: "transfer" | "payment_intent" | "payout";
   id?: string;
   status: "succeeded" | "processing" | "failed";
   balanceBefore?: number;
   balanceAfter?: number;
+  allowanceBefore?: number;
+  allowanceAfter?: number;
+  allowanceDebited?: boolean;
   destination?: string;
   error?: string;
 };

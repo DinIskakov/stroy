@@ -2,7 +2,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { cookies } from "next/headers";
 import { type Wallet } from "./data";
-const initial = (): Wallet => ({ balance: 30000, receipts: [], runs: 0 });
+const initial = (): Wallet => {
+  const configured = Number(process.env.SPENDING_ALLOWANCE_PENCE || 30000);
+  const balance =
+    Number.isSafeInteger(configured) &&
+    configured >= 0 &&
+    configured <= 10000000
+      ? configured
+      : 30000;
+  return { balance, receipts: [], runs: 0 };
+};
 function secret() {
   const s = process.env.WALLET_SECRET || process.env.OPENAI_API_KEY;
   if (!s) throw new Error("Wallet signing secret is not configured.");
@@ -11,13 +20,11 @@ function secret() {
 export function encodeWallet(wallet: Wallet) {
   const compact = {
     ...wallet,
-    receipts: wallet.receipts
-      .slice(0, 6)
-      .map((r) => ({
-        ...r,
-        reason: r.reason.slice(0, 200),
-        evidence: r.evidence.slice(0, 120),
-      })),
+    receipts: wallet.receipts.slice(0, 6).map((r) => ({
+      ...r,
+      reason: r.reason.slice(0, 200),
+      evidence: r.evidence.slice(0, 120),
+    })),
   };
   const payload = deflateSync(Buffer.from(JSON.stringify(compact))).toString(
     "base64url",

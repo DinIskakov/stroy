@@ -120,7 +120,7 @@ export default function Home() {
   const [people, setPeople] = useState<Profile[]>(defaults);
   const [policy, setPolicy] = useState<Policy>(defaultPolicy);
   const [wallet, setWallet] = useState<Wallet>({
-    balance: 30000,
+    balance: 34600,
     receipts: [],
     runs: 0,
   });
@@ -298,6 +298,14 @@ export default function Home() {
   const pending = wallet.receipts.filter((r) => r.status === "pending");
   const paid = wallet.receipts.filter((r) => r.status === "paid");
   const stripeEnabled = wallet.paymentProvider === "stripe";
+  const spentOrReserved = wallet.receipts.reduce(
+    (sum, receipt) =>
+      sum +
+      (receipt.status === "paid" || receipt.payment?.allowanceDebited
+        ? receipt.total
+        : 0),
+    0,
+  );
   async function run(profile: Profile) {
     if (busy) return;
     setSelected(profile.id);
@@ -429,7 +437,9 @@ export default function Home() {
                       ? "Your Stripe sandbox payment is confirmed. The receipt records the transaction and policy checks."
                       : "Your demo payment went through. Your gift is confirmed."
                     : data.receipt?.status === "processing"
-                      ? "Payment confirmation is pending. Check payment status before trying another purchase."
+                      ? data.receipt.payment?.allowanceDebited
+                        ? "The outgoing payout is submitted and its allowance is already reserved. Stripe settlement is pending; checking status will not deduct the allowance again."
+                        : "Payment confirmation is pending. Check payment status before trying another purchase."
                       : data.receipt?.status === "failed"
                         ? "The payment failed. Review the payment details below."
                         : "Gift declined. No payment was made.",
@@ -473,12 +483,16 @@ export default function Home() {
           <span />
           {r.status === "paid"
             ? r.payment?.provider === "stripe"
-              ? `Stripe sandbox ${r.payment.type === "transfer" ? "transfer" : "payment"} complete`
+              ? `Stripe sandbox ${r.payment.type === "payout" ? "payout paid" : r.payment.type === "transfer" ? "transfer complete" : "payment complete"}`
               : "Payment complete"
             : r.status === "pending"
               ? "Needs your approval"
               : r.status === "processing"
-                ? "Payment confirmation pending"
+                ? r.payment?.type === "payout"
+                  ? r.payment.id
+                    ? "Stripe sandbox payout submitted"
+                    : "Payout confirmation pending"
+                  : "Payment confirmation pending"
                 : r.status === "failed"
                   ? "Payment failed"
                   : "Declined"}
@@ -526,22 +540,52 @@ export default function Home() {
         <div className={`stripe-payment ${r.payment.status}`}>
           <div className="stripe-payment-heading">
             <CreditCard size={14} />
-            <strong>Stripe sandbox</strong>
+            <strong>
+              {r.payment.type === "payout"
+                ? "Outgoing Stripe sandbox payout"
+                : "Stripe sandbox"}
+            </strong>
             <span>TEST FUNDS</span>
           </div>
           {r.payment.id && (
             <a
               className="stripe-transaction"
-              href={`https://dashboard.stripe.com/test/${r.payment.type === "transfer" ? "connect/transfers" : "payments"}/${r.payment.id}`}
+              href={`https://dashboard.stripe.com/test/${r.payment.type === "payout" ? "payouts" : r.payment.type === "transfer" ? "connect/transfers" : "payments"}/${r.payment.id}`}
               target="_blank"
               rel="noopener noreferrer"
             >
-              {r.payment.type === "transfer" ? "Transfer" : "Payment"}{" "}
+              {r.payment.type === "payout"
+                ? "Payout"
+                : r.payment.type === "transfer"
+                  ? "Transfer"
+                  : "Payment"}{" "}
               {r.payment.id}
               <ArrowUpRight size={13} />
             </a>
           )}
-          {typeof r.payment.balanceBefore === "number" &&
+          {r.payment.type === "payout" && (
+            <p>
+              {r.status === "paid"
+                ? "Stripe confirms this outgoing payout as paid."
+                : r.payment.id && r.status === "processing"
+                  ? "An outgoing payout has been submitted to the Stripe test bank. It is not yet marked paid."
+                  : "This outgoing payout has not been confirmed as paid."}{" "}
+              This moves sandbox test funds only and does not order a real gift.
+            </p>
+          )}
+          {typeof r.payment.allowanceBefore === "number" &&
+            typeof r.payment.allowanceAfter === "number" && (
+              <div className="stripe-balance-change">
+                <span>Gift spending allowance</span>
+                <strong>
+                  {money(r.payment.allowanceBefore)}
+                  <ArrowRight size={12} />
+                  {money(r.payment.allowanceAfter)}
+                </strong>
+              </div>
+            )}
+          {(r.payment.type === "transfer" || r.payment.type === "payout") &&
+            typeof r.payment.balanceBefore === "number" &&
             typeof r.payment.balanceAfter === "number" && (
               <div className="stripe-balance-change">
                 <span>Platform GBP balance</span>
@@ -554,7 +598,10 @@ export default function Home() {
             )}
           {r.payment.destination && (
             <p className="stripe-destination">
-              Approved merchant account <code>{r.payment.destination}</code>
+              {r.payment.type === "payout"
+                ? "Stripe test bank"
+                : "Approved merchant account"}{" "}
+              <code>{r.payment.destination}</code>
             </p>
           )}
           {r.payment.error && (
@@ -562,11 +609,24 @@ export default function Home() {
           )}
           {r.status === "processing" && (
             <p>
-              Payment confirmation is pending. Check its status before making
-              another purchase.
+              {r.payment.type === "payout"
+                ? "Waiting for Stripe to mark the payout paid. The available sandbox balance may already be reduced; check payout status before trying again."
+                : "Payment confirmation is pending. Check its status before making another purchase."}
             </p>
           )}
-          {r.status === "failed" && <p>This gift has not been marked paid.</p>}
+          {r.status === "processing" && r.payment.allowanceDebited && (
+            <p>
+              {money(r.total)} is already reserved from your gift allowance. It
+              will not be deducted again when Stripe marks the payout paid. A
+              failed payout releases this reservation.
+            </p>
+          )}
+          {r.status === "failed" && (
+            <p>
+              This gift has not been marked paid. Any reserved spending
+              allowance is released.
+            </p>
+          )}
         </div>
       )}
       <small>
@@ -583,7 +643,7 @@ export default function Home() {
             onClick={() => decide(r, "retry")}
           >
             <LoaderCircle size={14} className={busy ? "spin" : ""} />
-            Check payment
+            {r.payment?.type === "payout" ? "Check payout" : "Check payment"}
           </button>
         </div>
       )}
@@ -916,11 +976,12 @@ export default function Home() {
                   </p>
                   <div>
                     <span>
-                      Starting balance<strong>£300</strong>
+                      Allowance before these gifts
+                      <strong>{money(wallet.balance + spentOrReserved)}</strong>
                     </span>
                     <span>
-                      Spent on gifts
-                      <strong>{money(30000 - wallet.balance)}</strong>
+                      Spent or reserved
+                      <strong>{money(spentOrReserved)}</strong>
                     </span>
                     <span>
                       Awaiting approval
@@ -955,7 +1016,7 @@ export default function Home() {
                   )}
                   <p>
                     {stripeEnabled
-                      ? "Available GBP in the Stripe platform sandbox. Successful transfers move test funds to approved merchant accounts. No live money or real orders."
+                      ? "Available GBP in the Stripe platform sandbox. Outgoing payouts reduce this balance for a configured Stripe test bank. Your gift spending allowance is separate. No live money or real orders."
                       : "Your balance is only reduced after a gift passes the spending rules. Approval requests don’t deduct any funds."}
                   </p>
                   {stripeEnabled && wallet.stripeConfigured === false && (
@@ -1754,16 +1815,18 @@ export default function Home() {
               evidence and spending rules.
             </p>
             <p>
-              People are saved in this browser and automatically synced to
-              Cognee as you update their details. Wallet state is kept in a
-              signed cookie. It is not a real financial ledger. Clearing browser
-              data starts a new demo and loses access to its Cognee memory;
-              cloud records remain in Cognee. Live web finds are research only:
-              check the seller’s price, stock and delivery. Catalog purchases
-              use eight fictional products. When configured, Stripe sandbox
-              transfers move test funds to approved merchant accounts; otherwise
-              payments use a mock wallet. Email reminders and real orders are
-              not enabled.
+              People are saved in this browser. When enabled, Cognee syncs their
+              details into scoped memory. Wallet state is kept in a signed
+              cookie and is not a financial ledger. Live web finds are research
+              only: check the seller’s price, stock and delivery. The outgoing
+              Stripe demo pays test funds from the sandbox balance to the
+              platform’s configured GBP test bank. A submitted payout reserves
+              its gift allowance immediately, stays processing until Stripe
+              reports paid, and is not deducted a second time on completion.
+              Failed payouts release that reservation. Only the account owner
+              can configure the platform’s test bank in Stripe Dashboard.
+              Optional mock mode is for offline demonstrations only. No real
+              gifts, emails or shipping are provided.
             </p>
             <button className="primary" onClick={() => setHelp(false)}>
               Got it <ArrowRight size={15} />
