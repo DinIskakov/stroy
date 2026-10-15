@@ -32,14 +32,12 @@ export async function saveWallet(wallet: Wallet) {
   // Keep the cookie compact; full decision receipts are also returned to the UI.
   const compact = {
     ...wallet,
-    receipts: wallet.receipts
-      .slice(0, 6)
-      .map((r) => ({
-        ...r,
-        reason: r.reason.slice(0, 200),
-        evidence: r.evidence.slice(0, 120),
-        policy: { ...r.policy, allowedMerchants: r.policy.allowedMerchants },
-      })),
+    receipts: wallet.receipts.slice(0, 6).map((r) => ({
+      ...r,
+      reason: r.reason.slice(0, 200),
+      evidence: r.evidence.slice(0, 120),
+      policy: { ...r.policy, allowedMerchants: r.policy.allowedMerchants },
+    })),
   };
   const payload = deflateSync(Buffer.from(JSON.stringify(compact))).toString(
     "base64url",

@@ -99,7 +99,7 @@ export async function runAgent(
       }),
       presentShortlist: tool({
         description:
-          "Record 1–3 ranked eligible gifts. Score is a subjective fit out of 100, not a measured probability. Evidence must quote the profile.",
+          "Synthesize Tavily findings into trendInsights and webGifts using returned source IDs, alongside 0–3 eligible demo gifts. Include at least one webGift when product sources exist and one trendInsight when trend sources exist. Score is subjective. Evidence must quote the profile.",
         inputSchema: z.object({
           trendInsights: z
             .array(
@@ -135,6 +135,30 @@ export async function runAgent(
           const research = result.research;
           const sources = research?.sources || [];
           if (research) {
+            if (
+              sources.some((s) => s.kind === "product") &&
+              !webGifts.some((g) =>
+                sources.some(
+                  (s) => s.id === g.sourceId && s.kind === "product",
+                ),
+              )
+            )
+              return {
+                error:
+                  "Include at least one relevant webGift using a returned product source ID.",
+              };
+            if (
+              sources.some((s) => s.kind === "trend") &&
+              !trendInsights.some((i) =>
+                i.sourceIds.some((id) =>
+                  sources.some((s) => s.id === id && s.kind === "trend"),
+                ),
+              )
+            )
+              return {
+                error:
+                  "Include at least one trendInsight citing a returned trend source ID.",
+              };
             research.insights = trendInsights
               .map((i) => ({
                 ...i,

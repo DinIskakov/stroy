@@ -852,7 +852,7 @@ export default function Home() {
                   [
                     "02",
                     "Your concierge connects the dots",
-                    "A considered shortlist, with a reason for every choice.",
+                    "Live gift research, personal context, and sources you can explore.",
                   ],
                   [
                     "03",
@@ -1180,7 +1180,7 @@ export default function Home() {
                   {
                     [
                       "Getting to know the little details…",
-                      "Finding things they might love…",
+                      "Researching trends and real gift ideas…",
                       "Considering the best fit…",
                       "Checking every spending rule…",
                     ][progress]
@@ -1188,7 +1188,7 @@ export default function Home() {
                 </h3>
                 <p>
                   Your concierge is working through the details. This usually
-                  takes 15–40 seconds.
+                  takes about a minute.
                 </p>
                 <div className="progress-dots">
                   {[0, 1, 2, 3].map((n) => (
@@ -1219,9 +1219,145 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <h3 className="drawer-section-title">
-                  Chosen with them in mind
-                </h3>
+                {result.research && (
+                  <section
+                    className="web-research"
+                    aria-label="Live gift research"
+                  >
+                    <div className="research-heading">
+                      <span className="eyebrow">
+                        A LITTLE INSPIRATION FROM THE WEB
+                      </span>
+                      <span className="research-status">
+                        {result.research.status === "complete"
+                          ? "Live · Tavily"
+                          : result.research.status === "partial"
+                            ? "Partial results"
+                            : "Search unavailable"}
+                      </span>
+                    </div>
+                    <h3 className="drawer-section-title">
+                      Their interests, out in the world.
+                    </h3>
+                    <p className="muted">
+                      {result.research.status === "unavailable"
+                        ? "We couldn’t find live sources this time. The choices below use our demo catalog."
+                        : `Searched ${new Date(result.research.searchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}. Trends inspire ideas; your notes tell us what fits.`}
+                    </p>
+                    {result.research.status === "partial" && (
+                      <p className="research-caution">
+                        One search couldn’t finish. These are the sources we
+                        could retrieve.
+                      </p>
+                    )}
+                    <div className="trend-insights">
+                      {result.research.insights.map((insight, i) => (
+                        <article key={i}>
+                          <span className="eyebrow">
+                            TREND SIGNAL {String(i + 1).padStart(2, "0")}
+                          </span>
+                          <p>{insight.text}</p>
+                          <div className="source-links">
+                            {insight.sourceIds.map((id) => {
+                              const source = result.research?.sources.find(
+                                (s) => s.id === id,
+                              );
+                              return source ? (
+                                <a
+                                  key={id}
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {new URL(source.url).hostname.replace(
+                                    /^www\./,
+                                    "",
+                                  )}{" "}
+                                  <ArrowUpRight size={12} />
+                                </a>
+                              ) : null;
+                            })}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    {result.research.gifts.length > 0 && (
+                      <>
+                        <h4 className="web-gifts-title">
+                          Gift ideas worth a closer look
+                        </h4>
+                        <div className="web-gifts">
+                          {result.research.gifts.map((gift, i) => {
+                            const source = result.research?.sources.find(
+                              (s) => s.id === gift.sourceId,
+                            );
+                            if (!source) return null;
+                            return (
+                              <article key={`${gift.sourceId}-${i}`}>
+                                <span className="eyebrow">
+                                  LIVE WEB FIND · RESEARCH ONLY
+                                </span>
+                                <h3>{gift.name}</h3>
+                                <p>{gift.reason}</p>
+                                <a
+                                  className="text-button"
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Explore{" "}
+                                  {new URL(source.url).hostname.replace(
+                                    /^www\./,
+                                    "",
+                                  )}{" "}
+                                  <ArrowUpRight size={14} />
+                                </a>
+                                <small>
+                                  Check the seller’s current price, stock and
+                                  delivery.
+                                </small>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                    {result.research.sources.length > 0 && (
+                      <details className="research-sources">
+                        <summary>
+                          Sources & search queries <ChevronRight size={14} />
+                        </summary>
+                        {result.research.queries.map((q) => (
+                          <p key={q.kind}>
+                            <strong>
+                              {q.kind === "trend" ? "Trends" : "Gift search"}
+                            </strong>{" "}
+                            · {q.query}
+                            {q.status === "failed" ? " · unavailable" : ""}
+                          </p>
+                        ))}
+                        {result.research.sources.map((source) => (
+                          <a
+                            key={source.id}
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <span>
+                              {source.kind === "trend"
+                                ? "INSPIRATION"
+                                : "GIFT SOURCE"}{" "}
+                              · {source.id}
+                            </span>
+                            {source.title}
+                            <ArrowUpRight size={12} />
+                          </a>
+                        ))}
+                      </details>
+                    )}
+                  </section>
+                )}
+                <h3 className="drawer-section-title">For your mock wallet</h3>
                 <div className="recommendations">
                   {result.recommendations.map((r, i) => {
                     const p = catalog.find((p) => p.id === r.productId)!;
@@ -1236,6 +1372,30 @@ export default function Home() {
                           <h3>{p.name}</h3>
                           <span className="muted">{p.merchant}</span>
                           <p>{r.reason}</p>
+                          {(r.sourceIds?.length || 0) > 0 && (
+                            <div className="source-links">
+                              {r.sourceIds?.map((id) => {
+                                const source = result.research?.sources.find(
+                                  (s) => s.id === id,
+                                );
+                                return source ? (
+                                  <a
+                                    key={id}
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Inspiration ·{" "}
+                                    {new URL(source.url).hostname.replace(
+                                      /^www\./,
+                                      "",
+                                    )}{" "}
+                                    <ArrowUpRight size={11} />
+                                  </a>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
                           <div className="product-price">
                             <strong>{money(p.price + p.shipping)}</strong>
                             <small>including delivery · {p.days} days</small>
@@ -1273,8 +1433,9 @@ export default function Home() {
                 <GiftArt />
                 <h3>A good gift starts with a little attention.</h3>
                 <p>
-                  I’ll read your notes, compare gifts from our demo studios, and
-                  check your spending rules before buying anything.
+                  I’ll read your notes, research relevant trends and gift ideas
+                  with Tavily, then choose a gift from our demo studios within
+                  your spending rules.
                 </p>
                 <div>
                   <ShieldCheck size={15} />
@@ -1485,10 +1646,11 @@ export default function Home() {
               notes, occasion, and budget, then choose “Find a gift.”
             </p>
             <p>
-              Our OpenAI agent uses the Vercel AI SDK to explore eight fictional
-              products, build an evidence-based shortlist, and attempt a mock
-              purchase. The prices, merchants, delivery estimates, and £300
-              wallet are all simulated.
+              Our OpenAI agent builds an interest profile from your notes, then
+              uses Tavily to research trends and real gift ideas with source
+              links. Generic interests and your budget are used for web
+              searches; we do not search for the person’s identity. Personal fit
+              comes first.
             </p>
             <p>
               Under your automatic limit, the agent can purchase independently.
@@ -1498,8 +1660,10 @@ export default function Home() {
             <p>
               This demo saves people and agent notes in this browser, and wallet
               state in a signed cookie. It is not a real financial ledger.
-              Clearing browser data starts a new demo. No live product search,
-              email reminders, real orders, or Stripe connection is enabled.
+              Clearing browser data starts a new demo. Live web finds are
+              research only: check the seller’s price, stock and delivery. Mock
+              wallet purchases use eight fictional catalog products. Email
+              reminders, real orders and Stripe payments are not enabled.
             </p>
             <button className="primary" onClick={() => setHelp(false)}>
               Lovely, let’s begin <ArrowRight size={15} />

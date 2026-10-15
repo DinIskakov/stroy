@@ -8,7 +8,7 @@ The problem: remembering an occasion is only the beginning. Choosing a relevant 
 
 This release is a working hackathon MVP for **Briefcase × Stripe — Track 01: Agents that Spend**. The live app is https://stroy-seven.vercel.app. Code is at https://github.com/DinIskakov/stroy; pushes to `main` automatically deploy to Vercel.
 
-**Current boundary:** AI decisions are real OpenAI calls through the Vercel AI SDK. The eight products, four merchants, prices, stock flags, delivery estimates, wallet and purchases are fictional. No real money moves. The hackathon requires a Stripe test-mode money movement in the demo; this mock version does not yet satisfy that requirement.
+**Current boundary:** AI decisions are real OpenAI calls through the Vercel AI SDK. Tavily web research is live and returns source-linked trend observations and gift ideas. The eight purchasable demo products, four demo merchants, prices, stock flags, delivery estimates, wallet and purchases are fictional. No real money moves. The hackathon requires a Stripe test-mode money movement in the demo; this mock version does not yet satisfy that requirement.
 
 ## Product requirements and why they matter
 
@@ -27,24 +27,29 @@ This release is a working hackathon MVP for **Briefcase × Stripe — Track 01: 
 
 A user starts a run for a recipient. The server sends that profile, the selected policy and wallet balance to OpenAI using the Vercel AI SDK. The default model is `gpt-4.1-mini`, configurable through `OPENAI_MODEL`.
 
-1. **`discoverGifts`:** Record extracted interests and evidence. Evaluate all eight catalog entries using server policy checks; return eligible products and rejection reasons.
-2. **`presentShortlist`:** Record one to three recommendations. Server code removes unknown or ineligible product IDs. A shortlist requires discovery first.
+1. **`discoverGifts`:** Record extracted interests and evidence. Search Tavily in parallel for recent trend inspiration (past year) and product/gift pages, up to four sources per query. Build queries from up to three generic interests and the budget, stripping recipient name tokens, emails, URLs and phone-like strings. Evaluate all eight demo catalog entries using server policy checks; return eligible products, rejection reasons and web sources.
+2. **`presentShortlist`:** Record up to three cited trend observations, three web gift ideas and three demo recommendations. Server code validates citation IDs against returned sources and removes unknown or ineligible demo product IDs. A shortlist requires discovery first. Live web ideas link to source pages; they are research-only and cannot be purchased with the mock wallet.
 3. **`purchaseGift`:** Select a product from the validated shortlist, recheck policy, and either record a paid mock receipt or queue a pending approval. Only one receipt can be created per agent run.
 4. **Explain the result:** Generate a short summary alongside the structured decision trace and receipt.
 5. **If pending:** Explicit approval rechecks the applicable server rules and deducts the mock funds once. Declining changes the receipt status without deducting funds. An already resolved receipt cannot be approved again through the normal API flow.
 
-The agent loop permits up to six generation steps and has a 65-second timeout. Failed requests do not persist wallet deductions. The summary and evidence are model-generated; they are not independently verified quotes or formal proofs.
+The agent loop permits up to six generation steps and has a 85-second timeout. Failed requests do not persist wallet deductions. The summary and evidence are model-generated; they are not independently verified quotes or formal proofs.
 
-**Ranking:** the current agent uses contextual judgment and subjective scores from 0–100. It does not implement fixed 50/20/20/10 weights, trend scoring, model training, or a separate recommendation model.
+**Ranking:** the current agent uses contextual judgment and subjective scores from 0–100. It can use cited web research as inspiration, but does not implement fixed 50/20/20/10 weights, calibrated trend scoring, model training, or a separate recommendation model. Personal relevance takes priority over popularity.
 
-## What it reads and what it does not fetch
+## Profile → interests → research → gift
 
-- Reads the profile fields supplied by the user and the static catalog in `src/lib/data.ts`.
-- Sends recipient context to OpenAI for inference and tool selection. Keep demo notes appropriate for an external AI provider.
-- Does not browse websites, open URLs from notes, scrape profiles, inspect social media, search live products, or retrieve current prices or trends.
-- Does not verify actual merchant stock or shipping. Availability and arrival are simulated using catalog fields.
+1. Create or edit a profile with notes about the person, their interests, dislikes, owned items, occasion and budget. “Find a gift” starts the pipeline; saving a profile alone does not trigger paid API calls.
+2. OpenAI interprets the notes as stated and inferred interests with evidence. Edit the source profile and rerun to correct the result.
+3. Tavily searches public web content for relevant trends and real gift ideas. It receives generic interest queries and the budget, not the full profile or notes. Name/contact filtering reduces accidental identity exposure; it is not a general-purpose personal-data redaction guarantee.
+4. OpenAI uses returned snippets to explain which trends and gift ideas could fit. Trends are signals from retrieved articles, not proof of popularity or evidence about the recipient. All displayed citations must resolve to a returned source ID.
+5. The UI presents live gift ideas with links and a separate demo shortlist for simulated wallet purchases. Real merchant links do not become approved payment counterparties.
 
-Notes are described to the model as untrusted data rather than instructions. Explicit dislikes and owned-item fields receive deterministic checks. Preferences mentioned only in prose depend on the model understanding them.
+Tavily search returns page snippets rather than fully reading every linked page. No direct profile scraping, social account access, or fetching URLs from notes is implemented. Source retrieval time is recorded; a page may still be stale. The app does not validate live checkout totals, stock or arrival estimates. Users must check seller details before buying externally.
+
+Each run allows one research call, with two parallel basic searches and 15-second timeouts. One failed search retains the successful results and marks research partial. Missing credentials, failures or no usable sources produce an unavailable state; the agent may continue using the demo catalog without claiming live findings.
+
+Retrieved text is untrusted data and cannot authorize spending or change the policy. OpenAI still receives the full supplied profile for interpretation. Explicit dislikes and owned-item fields receive deterministic checks; preferences mentioned only in prose depend on model understanding.
 
 ## Written spending policy
 
@@ -81,14 +86,14 @@ The integration test used actual OpenAI tool calls and HTTP requests with a cook
 | No affordable gift    | A £1 recipient budget produced no receipt and no balance change.                                                                                                                                                                                                                                                                                                                       |
 | No permitted merchant | An empty merchant allowlist produced no receipt and no balance change.                                                                                                                                                                                                                                                                                                                 |
 
-Seven deterministic policy tests additionally cover shipping totals, insufficient balance, hard budget limits even after approval, unavailable items, merchant restrictions, structured dislikes, ownership conflicts, late arrival, autopilot off, approval thresholds, duplicate occasions, and funds changing before approval.
+Seven Tavily unit tests cover generic-query privacy filtering, public HTTP(S) links, bounded source snippets, duplicate handling, missing credentials, partial failures and total failure. Seven deterministic policy tests additionally cover shipping totals, insufficient balance, hard budget limits even after approval, unavailable items, merchant restrictions, structured dislikes, ownership conflicts, late arrival, autopilot off, approval thresholds, duplicate occasions, and funds changing before approval.
 
 These runs demonstrate the checked paths; they do not guarantee that every model response will choose the same gift or correctly interpret every note. The integration test currently asserts the specific coffee and pottery choices, so alternative valid choices can cause a test failure.
 
 Test commands:
 
 ```sh
-npx tsx --test tests/policy.test.ts
+npx tsx --test tests/policy.test.ts tests/research.test.ts
 # With a local server and valid OpenAI credentials:
 npx tsx tests/agent.integration.ts
 # Against production; consumes OpenAI API credit:
@@ -97,7 +102,7 @@ TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 
 ## Implementation and MVP limits
 
-- **App and server:** Next.js App Router, React, TypeScript, Tailwind CSS, Vercel AI SDK, OpenAI, and Zod. No FastAPI service, Supabase database, or Cognee integration is currently used.
+- **App and server:** Next.js App Router, React, TypeScript, Tailwind CSS, Vercel AI SDK, OpenAI, Zod, and Tavily (`@tavily/core`). No FastAPI service, Supabase database, or Cognee integration is currently used.
 - **Persistence:** Browser localStorage holds profiles, settings and agent results. A compressed, signed, HTTP-only cookie holds wallet state and six recent receipts for up to seven days. This is a per-browser demo, not a shared account.
 - **Ledger limits:** Signing detects cookie modification, but does not prevent replay, simultaneous requests using the same balance snapshot, or a reset by clearing cookies. Duplicate detection is limited to retained receipts. This is not ready to control real funds.
 - **Evidence limits:** The model is asked to quote the profile, but code does not validate quote fidelity. The activity view records application events, not a complete provider transcript or hidden model reasoning. P1 availability is enforced but is not currently appended as a successful receipt rule.
@@ -108,7 +113,7 @@ TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 
 1. **Stripe test-mode execution:** Replace mock settlement with a supported Stripe test integration, preserve the same policy gate, and record Stripe transaction identifiers. Required to satisfy the hackathon’s actual money-movement criterion. Stripe alone cannot purchase from arbitrary online shops.
 2. **Durable payment state:** Before introducing real funds, use authenticated storage, atomic balance changes, durable idempotency and complete occasion history. Preserve policy and recipient snapshots for approval and audit.
-3. **Live discovery:** Add an explicit web/product research tool with source URLs and timestamps, then verify price, stock, delivery and merchant eligibility before purchase. Needed for useful recommendations beyond the demo catalog.
+3. **Live purchasing eligibility:** Tavily discovery now provides source URLs and timestamps. Add verification of seller identity, checkout price, stock, delivery and merchant eligibility before any external product becomes purchasable. Needed to connect live inspiration to reliable execution.
 4. **Reliable evidence:** Validate quoted evidence against supplied text and distinguish confirmed preferences from hypotheses. Needed for trustworthy explanations.
 5. **Scheduled occasions and reminders:** Add opt-in scheduling and notifications once the purchase flow and persistence support unattended operation.
 
