@@ -283,6 +283,7 @@ export default function Home() {
   const result = results[current?.id];
   const pending = wallet.receipts.filter((r) => r.status === "pending");
   const paid = wallet.receipts.filter((r) => r.status === "paid");
+  const stripeEnabled = wallet.paymentProvider === "stripe";
   async function run(profile: Profile) {
     if (busy) return;
     setSelected(profile.id);
@@ -368,9 +369,28 @@ export default function Home() {
       setBusy(false);
     }
   }
-  async function decide(receipt: Receipt, action: "approve" | "decline") {
+  async function decide(
+    receipt: Receipt,
+    action: "approve" | "decline" | "retry",
+  ) {
     if (busy) return;
     setBusy(true);
+    setProgressEvents([
+      {
+        stage: action === "decline" ? "policy" : "payment",
+        kind: "info",
+        title:
+          action === "retry"
+            ? "Checking payment confirmation…"
+            : action === "approve"
+              ? "Submitting your approval…"
+              : "Declining this gift…",
+        detail:
+          action === "decline"
+            ? "Updating this decision without making a payment."
+            : "Confirming this purchase before updating its receipt.",
+      },
+    ]);
     setError("");
     try {
       const res = await fetch("/api/agent", {
@@ -390,9 +410,15 @@ export default function Home() {
                 ...r,
                 receipt: data.receipt,
                 summary:
-                  action === "approve"
-                    ? "Approved by you, taken care of by stroy. Your mock purchase is complete."
-                    : "Gift declined. Your wallet balance is unchanged.",
+                  data.receipt?.status === "paid"
+                    ? data.receipt.payment?.provider === "stripe"
+                      ? "Your Stripe sandbox payment is confirmed. The receipt records the transaction and policy checks."
+                      : "Your mock purchase is complete."
+                    : data.receipt?.status === "processing"
+                      ? "Payment confirmation is pending. Check payment status before trying another purchase."
+                      : data.receipt?.status === "failed"
+                        ? "The payment failed. Review the payment details below."
+                        : "Gift declined. No payment was made.",
               },
             }
           : old;
@@ -432,10 +458,16 @@ export default function Home() {
         <span className={`status ${r.status}`}>
           <span />
           {r.status === "paid"
-            ? "Mock purchase complete"
+            ? r.payment?.provider === "stripe"
+              ? `Stripe sandbox ${r.payment.type === "transfer" ? "transfer" : "payment"} complete`
+              : "Mock purchase complete"
             : r.status === "pending"
               ? "Needs your approval"
-              : "Declined"}
+              : r.status === "processing"
+                ? "Payment confirmation pending"
+                : r.status === "failed"
+                  ? "Payment failed"
+                  : "Declined"}
         </span>
         <strong>{money(r.total)}</strong>
       </div>
@@ -455,10 +487,71 @@ export default function Home() {
           ))}
         </div>
       )}
+      {r.payment?.provider === "stripe" && (
+        <div className={`stripe-payment ${r.payment.status}`}>
+          <div className="stripe-payment-heading">
+            <CreditCard size={14} />
+            <strong>Stripe sandbox</strong>
+            <span>TEST FUNDS</span>
+          </div>
+          {r.payment.id && (
+            <a
+              className="stripe-transaction"
+              href={`https://dashboard.stripe.com/test/${r.payment.type === "transfer" ? "connect/transfers" : "payments"}/${r.payment.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {r.payment.type === "transfer" ? "Transfer" : "Payment"}{" "}
+              {r.payment.id}
+              <ArrowUpRight size={13} />
+            </a>
+          )}
+          {typeof r.payment.balanceBefore === "number" &&
+            typeof r.payment.balanceAfter === "number" && (
+              <div className="stripe-balance-change">
+                <span>Platform GBP balance</span>
+                <strong>
+                  {money(r.payment.balanceBefore)}
+                  <ArrowRight size={12} />
+                  {money(r.payment.balanceAfter)}
+                </strong>
+              </div>
+            )}
+          {r.payment.destination && (
+            <p className="stripe-destination">
+              Approved merchant account <code>{r.payment.destination}</code>
+            </p>
+          )}
+          {r.payment.error && (
+            <p className="stripe-payment-error">{r.payment.error}</p>
+          )}
+          {r.status === "processing" && (
+            <p>
+              Payment confirmation is pending. Check its status before making
+              another purchase.
+            </p>
+          )}
+          {r.status === "failed" && <p>This gift has not been marked paid.</p>}
+        </div>
+      )}
       <small>
         Decision {r.id.slice(0, 8)} · {new Date(r.at).toLocaleString("en-GB")} ·
-        Simulated funds
+        {r.payment?.provider === "stripe"
+          ? "Stripe sandbox · test funds"
+          : "Simulated funds"}
       </small>
+      {r.status === "processing" && (
+        <div className="actions">
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => decide(r, "retry")}
+          >
+            <LoaderCircle size={14} className={busy ? "spin" : ""} />
+            Check payment
+          </button>
+        </div>
+      )}
       {r.status === "pending" && (
         <div className="actions">
           <button
@@ -507,7 +600,10 @@ export default function Home() {
               onClick={() => navigate("wallet")}
             >
               <WalletIcon size={18} />
-              Wallet <span className="tiny-badge">DEMO</span>
+              Wallet{" "}
+              <span className="tiny-badge">
+                {stripeEnabled ? "SANDBOX" : "DEMO"}
+              </span>
             </button>
             <button
               className={view === "settings" ? "active" : ""}
@@ -561,7 +657,9 @@ export default function Home() {
           <div>
             <span className="demo-label">
               <span />
-              Demo · simulated funds
+              {stripeEnabled
+                ? "Stripe sandbox · test funds"
+                : "Demo · simulated funds"}
             </span>
             <span className="user-avatar small">D</span>
           </div>
@@ -626,7 +724,8 @@ export default function Home() {
           {view === "overview" && (
             <div className="balance-strip">
               <span>
-                <WalletIcon size={17} /> Demo balance{" "}
+                <WalletIcon size={17} />{" "}
+                {stripeEnabled ? "Spending allowance" : "Demo balance"}{" "}
                 <strong>{money(wallet.balance)}</strong>
               </span>
               <button
@@ -799,10 +898,16 @@ export default function Home() {
               <div className="wallet-layout">
                 <section className="balance-card">
                   <span className="eyebrow">
-                    YOUR GIFTING WALLET · SIMULATION
+                    {stripeEnabled
+                      ? "YOUR GIFTING ALLOWANCE · SANDBOX"
+                      : "YOUR GIFTING WALLET · SIMULATION"}
                   </span>
                   <h2>{money(wallet.balance)}</h2>
-                  <p>Available demo balance</p>
+                  <p>
+                    {stripeEnabled
+                      ? "Remaining spending allowance"
+                      : "Available demo balance"}
+                  </p>
                   <div>
                     <span>
                       Starting balance<strong>£300</strong>
@@ -819,16 +924,40 @@ export default function Home() {
                     </span>
                   </div>
                   <small>
-                    Mock funds only. No card connected. No real purchases.
+                    {stripeEnabled
+                      ? "This allowance sets your spending ceiling. Stripe sandbox funds are shown separately."
+                      : "Mock funds only. No card connected. No real purchases."}
                   </small>
                 </section>
                 <div className="wallet-note">
-                  <ShieldCheck size={30} />
-                  <h2>You’re in control.</h2>
+                  {stripeEnabled ? (
+                    <CreditCard size={30} />
+                  ) : (
+                    <ShieldCheck size={30} />
+                  )}
+                  <h2>
+                    {stripeEnabled
+                      ? "Stripe sandbox balance"
+                      : "You’re in control."}
+                  </h2>
+                  {stripeEnabled && (
+                    <strong className="stripe-wallet-balance">
+                      {typeof wallet.stripeBalance === "number"
+                        ? money(wallet.stripeBalance)
+                        : "Unavailable"}
+                    </strong>
+                  )}
                   <p>
-                    Your balance is only reduced after a gift passes the
-                    spending rules. Approval requests don’t deduct any funds.
+                    {stripeEnabled
+                      ? "Available GBP in the Stripe platform sandbox. Successful transfers move test funds to approved merchant accounts. No live money or real orders."
+                      : "Your balance is only reduced after a gift passes the spending rules. Approval requests don’t deduct any funds."}
                   </p>
+                  {stripeEnabled && wallet.stripeConfigured === false && (
+                    <p className="stripe-wallet-warning">
+                      Stripe sandbox could not be reached. Payments will not
+                      silently fall back to mock funds.
+                    </p>
+                  )}
                   <button
                     className="text-button"
                     onClick={() => navigate("settings")}
@@ -840,7 +969,8 @@ export default function Home() {
               <div className="section-heading">
                 <h2>Recent decisions</h2>
                 <span className="muted">
-                  {paid.length} completed mock purchases
+                  {paid.length} completed{" "}
+                  {stripeEnabled ? "sandbox payments" : "mock purchases"}
                 </span>
               </div>
               {wallet.receipts.length ? (
@@ -860,7 +990,7 @@ export default function Home() {
                 <ShieldCheck size={26} />
                 <div>
                   <h2>Control how your agent spends.</h2>
-                  <p>Hard checks run in code before any mock money moves.</p>
+                  <p>Hard checks run in code before any payment.</p>
                 </div>
               </div>
               <div className="setting-row">
@@ -958,7 +1088,11 @@ export default function Home() {
               stroy ✳
             </Link>
             <span>Thoughtfully chosen. Clearly explained.</span>
-            <span>Demo · no real money moves</span>
+            <span>
+              {stripeEnabled
+                ? "Stripe sandbox · no live money"
+                : "Demo · no real money moves"}
+            </span>
           </footer>
         </main>
       </div>
@@ -992,7 +1126,10 @@ export default function Home() {
               Gifts for <em>{current?.name.split(" ")[0]}.</em>
             </h2>
             <p className="muted">
-              Personal picks. Clear rules. Simulated purchases.
+              Personal picks. Clear rules.{" "}
+              {stripeEnabled
+                ? "Stripe sandbox payments."
+                : "Simulated purchases."}
             </p>
             <div className="agent-controls">
               <select
@@ -1360,7 +1497,9 @@ export default function Home() {
                 </p>
                 <div>
                   <ShieldCheck size={15} />
-                  No real money moves in this demo.
+                  {stripeEnabled
+                    ? "Test funds only. No live money or real orders."
+                    : "No real money moves in this demo."}
                 </div>
               </div>
             )}
@@ -1605,9 +1744,11 @@ export default function Home() {
               signed cookie. It is not a real financial ledger. Clearing browser
               data starts a new demo and loses access to its Cognee memory;
               cloud records remain in Cognee. Live web finds are research only:
-              check the seller’s price, stock and delivery. Mock wallet
-              purchases use eight fictional catalog products. Email reminders,
-              real orders and Stripe payments are not enabled.
+              check the seller’s price, stock and delivery. Catalog purchases
+              use eight fictional products. When configured, Stripe sandbox
+              transfers move test funds to approved merchant accounts; otherwise
+              payments use a mock wallet. Email reminders and real orders are
+              not enabled.
             </p>
             <button className="primary" onClick={() => setHelp(false)}>
               Got it <ArrowRight size={15} />

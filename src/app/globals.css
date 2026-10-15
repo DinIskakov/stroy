@@ -3426,3 +3426,121 @@ em {
     font-size: 9px;
   }
 }
+.stripe-payment {
+  border: 1px solid #dbe5fa;
+  background: #f4f7ff;
+  border-radius: 7px;
+  padding: 16px;
+  margin: 17px 0;
+}
+.stripe-payment-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b8bc5;
+  font-size: 10px;
+}
+.stripe-payment-heading strong {
+  font-weight: 550;
+}
+.stripe-payment-heading > span {
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding: 4px 6px;
+  border: 1px solid #dce6fa;
+  border-radius: 3px;
+  margin-left: auto;
+  color: #91a6ca;
+}
+.stripe-transaction {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #6289d1;
+  margin-top: 13px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.stripe-balance-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #e1e9fa;
+  font-size: 9px;
+  color: #91a5c5;
+}
+.stripe-balance-change strong {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 550;
+  color: #6987b7;
+}
+.stripe-payment > p {
+  font-size: 9px;
+  color: #93a6c4;
+  line-height: 1.9;
+  margin-top: 11px;
+  overflow-wrap: anywhere;
+}
+.stripe-destination code {
+  font-size: 8px;
+  color: #88a0c6;
+}
+.stripe-payment.failed {
+  background: #fff8f6;
+  border-color: #f0deda;
+}
+.stripe-payment .stripe-payment-error {
+  color: #bd8378;
+}
+.status.processing {
+  color: #8d93bb;
+}
+.status.processing > span {
+  background: #9ca6d5;
+}
+.status.failed {
+  color: #ba8179;
+}
+.status.failed > span {
+  background: #cd9b92;
+}
+.stripe-wallet-balance {
+  display: block;
+  font-family: var(--font-display), var(--sans);
+  font-size: 35px;
+  letter-spacing: -1.2px;
+  color: #6384bd;
+  margin-top: 17px;
+  font-weight: 500;
+}
+.wallet-note .stripe-wallet-warning {
+  background: #fff7ee;
+  color: #b39774;
+  padding: 11px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.wallet-note .stripe-wallet-balance + p {
+  max-width: 340px;
+}
+@media (max-width: 480px) {
+  .stripe-payment {
+    padding: 13px;
+  }
+  .stripe-transaction {
+    font-size: 8px;
+  }
+  .stripe-balance-change {
+    font-size: 8px;
+  }
+  .stripe-balance-change strong {
+    font-size: 10px;
+  }
+}

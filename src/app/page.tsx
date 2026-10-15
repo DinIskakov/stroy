@@ -358,7 +358,8 @@ export default function Landing() {
             </div>
             <p>
               Every purchase includes the choice, its evidence, and the rules it
-              passed. All payments in this demo are simulated.
+              passed. When configured, Stripe sandbox transfers move test funds
+              to approved demo merchants. No live money is spent.
             </p>
           </div>
         </section>
@@ -374,7 +375,7 @@ export default function Landing() {
             {[
               [
                 "Does stroy spend real money?",
-                "No. This version starts with a £300 mock balance. Purchases and approval flows are simulated; no payment card is connected and no real orders are placed.",
+                "No live money is spent. You start with a £300 spending allowance. When configured, Stripe sandbox transfers move test funds to approved merchant accounts; otherwise the demo uses mock payments. No real orders are placed.",
               ],
               [
                 "What does the agent search online?",
@@ -422,7 +423,7 @@ export default function Landing() {
       <footer className="landing-footer">
         <span>stroy ✳</span>
         <span>Made for the people who matter.</span>
-        <span>Demo experience · simulated purchases</span>
+        <span>Demo experience · test funds only</span>
       </footer>
     </div>
   );
