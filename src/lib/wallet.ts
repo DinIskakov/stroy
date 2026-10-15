@@ -11,7 +11,7 @@ export async function readWallet(): Promise<Wallet> {
 }
 export async function saveWallet(wallet: Wallet) {
  // Keep the cookie compact; full decision receipts are also returned to the UI.
- const compact = {...wallet,receipts:wallet.receipts.slice(0,6).map(r=>({...r,reason:r.reason.slice(0,200),evidence:r.evidence.slice(0,120),rules:[],policy:{...r.policy,allowedMerchants:r.policy.allowedMerchants}}))};
+ const compact = {...wallet,receipts:wallet.receipts.slice(0,6).map(r=>({...r,reason:r.reason.slice(0,200),evidence:r.evidence.slice(0,120),policy:{...r.policy,allowedMerchants:r.policy.allowedMerchants}}))};
  const payload = deflateSync(Buffer.from(JSON.stringify(compact))).toString('base64url');
  const signature = createHmac('sha256',secret()).update(payload).digest('base64url');
  (await cookies()).set('stroy-wallet',`${payload}.${signature}`,{ httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',maxAge:60*60*24*7 });
