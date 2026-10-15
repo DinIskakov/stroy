@@ -22,6 +22,9 @@ import {
   CheckCheck,
   History,
   Menu,
+  Search,
+  Globe,
+  CreditCard,
 } from "lucide-react";
 import {
   profiles as defaults,
@@ -44,6 +47,28 @@ type View =
   | "wallet"
   | "settings"
   | "catalog";
+type ProgressEvent = {
+  title: string;
+  detail: string;
+  kind: "info" | "success" | "warning";
+  stage:
+    | "profile"
+    | "memory"
+    | "research"
+    | "shortlist"
+    | "policy"
+    | "payment"
+    | "complete";
+};
+const stageIcons = {
+  profile: Users,
+  memory: History,
+  research: Search,
+  shortlist: Gift,
+  policy: ShieldCheck,
+  payment: CreditCard,
+  complete: Check,
+};
 const nav = [
   { id: "overview", label: "People", icon: Users },
   { id: "catalog", label: "Demo catalog", icon: Gift },
@@ -86,7 +111,7 @@ export default function Home() {
   const [results, setResults] = useState<Record<string, AgentResult>>({});
   const [selected, setSelected] = useState("alex");
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progressEvents, setProgressEvents] = useState<ProgressEvent[]>([]);
   const [error, setError] = useState("");
   const [editing, setEditingState] = useState<Profile | null>(null);
   const [showAgent, setShowAgent] = useState(false);
@@ -182,11 +207,6 @@ export default function Home() {
       } catch {}
     }
   }, [people, policy, results, ready]);
-  useEffect(() => {
-    if (!busy) return;
-    const id = setInterval(() => setProgress((v) => Math.min(v + 1, 3)), 6500);
-    return () => clearInterval(id);
-  }, [busy]);
   const activeDialog = help
     ? "help"
     : editing
@@ -268,18 +288,76 @@ export default function Home() {
     setSelected(profile.id);
     setShowAgent(true);
     setBusy(true);
-    setProgress(0);
+    setProgressEvents([]);
     setError("");
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
+        },
         body: JSON.stringify({ action: "run", profile, policy }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResults((old) => ({ ...old, [profile.id]: data.result }));
-      setWallet(data.wallet);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Could not start your gift agent.");
+      }
+      if (!res.headers.get("content-type")?.includes("application/x-ndjson")) {
+        const data = await res.json();
+        setResults((old) => ({ ...old, [profile.id]: data.result }));
+        setWallet(data.wallet);
+      } else {
+        if (!res.body)
+          throw new Error("The agent response was empty. Please try again.");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let receivedResult = false;
+        async function receive(line: string) {
+          if (!line.trim()) return;
+          const message = JSON.parse(line);
+          if (message.type === "error")
+            throw new Error(message.error || "The agent could not finish.");
+          if (message.type === "progress" && message.event) {
+            setProgressEvents((events) => [...events, message.event]);
+          } else if (message.type === "result") {
+            if (!message.walletToken)
+              throw new Error(
+                "The agent finished, but its wallet session could not be saved. Please refresh before trying again.",
+              );
+            const saved = await fetch("/api/wallet", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: message.walletToken }),
+            });
+            if (!saved.ok)
+              throw new Error(
+                "The agent finished, but your wallet session could not be saved. Please refresh before trying again.",
+              );
+            receivedResult = true;
+            setResults((old) => ({ ...old, [profile.id]: message.result }));
+            setWallet(message.wallet);
+          }
+        }
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value, { stream: !done });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) await receive(line);
+            if (done) break;
+          }
+          await receive(buffer);
+          if (!receivedResult)
+            throw new Error(
+              "The connection ended before your agent finished. Please try again.",
+            );
+        } finally {
+          reader.releaseLock();
+        }
+      }
     } catch (e) {
       setError(
         e instanceof Error
@@ -955,32 +1033,93 @@ export default function Home() {
                 {error}
               </div>
             )}
-            {busy && (
-              <div className="thinking" role="status">
-                <div className="thinking-orb">
-                  <Sparkles size={27} />
-                </div>
-                <h3>
-                  {
-                    [
-                      "Getting to know the little details…",
-                      "Finding thoughtful gift ideas…",
-                      "Considering the best fit…",
-                      "Checking every spending rule…",
-                    ][progress]
-                  }
-                </h3>
-                <p>
-                  Your concierge is working through the details. This usually
-                  takes about a minute.
-                </p>
-                <div className="progress-dots">
-                  {[0, 1, 2, 3].map((n) => (
-                    <span key={n} className={n <= progress ? "lit" : ""} />
-                  ))}
-                </div>
-              </div>
-            )}
+            {busy &&
+              (() => {
+                const active = progressEvents[progressEvents.length - 1];
+                const ActiveIcon = active
+                  ? stageIcons[active.stage] || Sparkles
+                  : Sparkles;
+                return (
+                  <section
+                    className={`agent-live stage-${active?.stage || "profile"}`}
+                    aria-label="Live agent activity"
+                  >
+                    <div className="live-heading">
+                      <span className="live-indicator" />
+                      LIVE AGENT ACTIVITY
+                      <span className="live-running">
+                        Working for {current?.name.split(" ")[0]}
+                      </span>
+                    </div>
+                    <div
+                      className="live-stage"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div
+                        className="live-stage-orb"
+                        key={active?.stage || "starting"}
+                      >
+                        <ActiveIcon size={27} />
+                        {active?.stage === "research" && (
+                          <span className="live-search-globe">
+                            <Globe size={14} />
+                          </span>
+                        )}
+                      </div>
+                      <h3>{active?.title || "Starting your gift agent…"}</h3>
+                      <p>
+                        {active?.detail ||
+                          "Connecting to your agent. Its progress will appear here as it works."}
+                      </p>
+                      <div className="live-scanning">
+                        <span />
+                      </div>
+                    </div>
+                    {progressEvents.length > 0 && (
+                      <div
+                        className="live-events"
+                        role="log"
+                        aria-label="Agent progress events"
+                        aria-live="polite"
+                      >
+                        {progressEvents.map((event, i) => {
+                          const EventIcon =
+                            event.kind === "success"
+                              ? Check
+                              : stageIcons[event.stage] || Sparkles;
+                          const isCurrent = i === progressEvents.length - 1;
+                          return (
+                            <div
+                              className={`live-event ${isCurrent ? "is-current" : ""} ${event.kind}`}
+                              key={`${i}-${event.stage}`}
+                            >
+                              <span className="live-event-icon">
+                                <EventIcon size={14} />
+                              </span>
+                              <div>
+                                <strong>{event.title}</strong>
+                                <p>{event.detail}</p>
+                              </div>
+                              {isCurrent && (
+                                <LoaderCircle
+                                  size={13}
+                                  className="spin live-event-loading"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <small className="live-footnote">
+                      <ShieldCheck size={12} />
+                      Progress comes directly from your agent. Your spending
+                      rules stay in force.
+                    </small>
+                  </section>
+                );
+              })()}
             {!busy && result && (
               <>
                 <div className="agent-summary">
