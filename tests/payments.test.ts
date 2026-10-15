@@ -1,0 +1,375 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  catalog,
+  defaultPolicy,
+  profiles,
+  type Receipt,
+  type Wallet,
+} from "../src/lib/data";
+import {
+  executePayment,
+  paymentProvider,
+  sandboxClient,
+} from "../src/lib/payments";
+
+const coffee = catalog.find((p) => p.id === "coffee")!;
+const destination = "acct_TestMerchant123";
+const wallet = (): Wallet => ({ balance: 30000, receipts: [], runs: 0 });
+const receipt = (overrides: Partial<Receipt> = {}): Receipt => ({
+  id: "payment-unit-test",
+  profileId: profiles[0].id,
+  name: profiles[0].name,
+  productId: coffee.id,
+  total: coffee.price + coffee.shipping,
+  budget: profiles[0].budget,
+  date: "2099-11-08",
+  reason: "Matches the recipient's stated coffee interest",
+  evidence: "Loves specialty coffee",
+  rules: ["P2 · Approved merchant", "P8 · Within automatic spending limit"],
+  at: new Date().toISOString(),
+  status: "processing",
+  policy: defaultPolicy,
+  ...overrides,
+});
+type CapturedRequest = {
+  url: URL;
+  init: RequestInit;
+  headers: Headers;
+  body: URLSearchParams;
+};
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "stripe-should-retry": "false",
+    },
+  });
+}
+function balance(amount: number) {
+  return response({
+    object: "balance",
+    livemode: false,
+    available: [{ currency: "gbp", amount }],
+    pending: [],
+  });
+}
+function transfer(total = 3600) {
+  return response({
+    id: "tr_TestGift123",
+    object: "transfer",
+    livemode: false,
+    amount: total,
+    currency: "gbp",
+    destination,
+    reversed: false,
+  });
+}
+async function sandbox(
+  run: (requests: CapturedRequest[]) => Promise<void>,
+  handler?: (
+    request: CapturedRequest,
+    index: number,
+  ) => Response | Promise<Response>,
+  environment: Record<string, string | undefined> = {},
+) {
+  const values: Record<string, string | undefined> = {
+    PAYMENT_PROVIDER: "stripe",
+    STRIPE_SECRET_KEY: "sk_test_unit_test_only",
+    STRIPE_MERCHANT_ACCOUNTS: JSON.stringify({
+      [coffee.merchant]: destination,
+    }),
+    ...environment,
+  };
+  const previous = Object.fromEntries(
+    Object.keys(values).map((key) => [key, process.env[key]]),
+  );
+  const originalFetch = globalThis.fetch;
+  const requests: CapturedRequest[] = [];
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    const request = {
+      url: new URL(input instanceof Request ? input.url : String(input)),
+      init: init || {},
+      headers: new Headers(init?.headers),
+      body: new URLSearchParams(String(init?.body || "")),
+    };
+    requests.push(request);
+    if (!handler) throw new Error("Unexpected Stripe request in test");
+    return handler(request, requests.length - 1);
+  }) as typeof fetch;
+  try {
+    await run(requests);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test("live Stripe keys are refused without a request or wallet debit", async () => {
+  await sandbox(
+    async (requests) => {
+      assert.throws(() => sandboxClient(), /Live keys are not accepted/);
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.match(result.payment?.error || "", /Live keys are not accepted/);
+      assert.equal(state.balance, 30000);
+      assert.equal(requests.length, 0);
+    },
+    undefined,
+    { STRIPE_SECRET_KEY: "sk_live_unit_test_only" },
+  );
+});
+
+test("missing approved merchant mapping fails without debiting funds", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.match(result.payment?.error || "", /connected account/);
+      assert.equal(state.balance, 30000);
+      assert.equal(requests.length, 0);
+    },
+    undefined,
+    { STRIPE_MERCHANT_ACCOUNTS: "{}" },
+  );
+});
+
+test("unknown products, altered totals and insufficient wallet funds cannot reach Stripe", async () => {
+  await sandbox(async (requests) => {
+    for (const attempted of [
+      receipt({ productId: "attacker-product" }),
+      receipt({ total: 1 }),
+      receipt({ total: 0 }),
+    ]) {
+      const state = wallet();
+      await assert.rejects(
+        executePayment(attempted, state),
+        /Payment amount does not match/,
+      );
+      assert.equal(state.balance, 30000);
+    }
+    const state = { ...wallet(), balance: 3500 };
+    await assert.rejects(
+      executePayment(receipt(), state),
+      /Payment amount does not match/,
+    );
+    assert.equal(state.balance, 3500);
+    assert.equal(requests.length, 0);
+  });
+});
+
+test("pending or declined gifts require explicit approval before payment", async () => {
+  await sandbox(async (requests) => {
+    const state = wallet();
+    for (const status of ["pending", "declined"] as const) {
+      await assert.rejects(
+        executePayment(receipt({ status }), state),
+        /explicit approval/,
+      );
+    }
+    assert.equal(state.balance, 30000);
+    assert.equal(requests.length, 0);
+  });
+});
+
+test("sandbox transfer uses canonical amount, currency, merchant and stable idempotency key", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "paid");
+      assert.equal(state.balance, 26400);
+      assert.equal(state.receipts.length, 1);
+      assert.deepEqual(result.payment, {
+        provider: "stripe",
+        type: "transfer",
+        id: "tr_TestGift123",
+        status: "succeeded",
+        destination,
+        balanceBefore: 50000,
+        balanceAfter: 46400,
+      });
+      assert.deepEqual(
+        requests.map((r) => `${r.init.method} ${r.url.pathname}`),
+        ["GET /v1/balance", "POST /v1/transfers", "GET /v1/balance"],
+      );
+      assert.ok(
+        requests.every((r) => r.url.origin === "https://api.stripe.com"),
+      );
+      const payment = requests[1];
+      assert.equal(payment.body.get("amount"), "3600");
+      assert.equal(payment.body.get("currency"), "gbp");
+      assert.equal(payment.body.get("destination"), destination);
+      assert.equal(
+        payment.headers.get("idempotency-key"),
+        "stroy-gift-payment-unit-test",
+      );
+      assert.equal(
+        payment.body.get("metadata[stroy_decision_id]"),
+        "payment-unit-test",
+      );
+      assert.equal(payment.body.get("metadata[product_id]"), coffee.id);
+      assert.equal(payment.body.get("metadata[merchant]"), coffee.merchant);
+      assert.equal(
+        payment.body.get("metadata[budget_pence]"),
+        String(profiles[0].budget),
+      );
+      assert.equal(
+        payment.body.get("metadata[auto_limit_pence]"),
+        String(defaultPolicy.autoLimit),
+      );
+      assert.equal(payment.body.get("metadata[policy_rules]"), "P2,P8");
+      assert.equal(payment.body.get("metadata[sandbox]"), "true");
+      const retried = await executePayment(receipt(), state);
+      assert.equal(retried, result);
+      assert.equal(state.balance, 26400);
+      assert.equal(
+        requests.length,
+        3,
+        "replaying a paid decision does not issue another transfer",
+      );
+    },
+    (request, index) =>
+      request.url.pathname === "/v1/transfers"
+        ? transfer()
+        : balance(index === 0 ? 50000 : 46400),
+  );
+});
+
+test("insufficient Stripe GBP balance prevents a transfer and leaves wallet intact", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.match(result.payment?.error || "", /Insufficient GBP/);
+      assert.equal(state.balance, 30000);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].url.pathname, "/v1/balance");
+    },
+    () => balance(3500),
+  );
+});
+
+test("rejected Stripe transfer never marks a gift paid or debits wallet funds", async () => {
+  await sandbox(
+    async () => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.equal(result.payment?.status, "failed");
+      assert.equal(state.balance, 30000);
+      assert.equal(state.receipts[0].status, "failed");
+    },
+    (request) =>
+      request.url.pathname === "/v1/balance"
+        ? balance(50000)
+        : response(
+            {
+              error: {
+                type: "invalid_request_error",
+                message: "Destination does not exist",
+                code: "resource_missing",
+              },
+            },
+            400,
+          ),
+  );
+});
+
+test("ambiguous confirmation retries the same idempotency key and debits once when confirmed", async () => {
+  let transferCalls = 0;
+  await sandbox(
+    async (requests) => {
+      const state = wallet();
+      const uncertain = await executePayment(receipt(), state);
+      assert.equal(uncertain.status, "processing");
+      assert.equal(uncertain.payment?.status, "processing");
+      assert.equal(state.balance, 30000);
+      const confirmed = await executePayment(uncertain, state);
+      assert.equal(confirmed.status, "paid");
+      assert.equal(confirmed.payment?.balanceBefore, 50000);
+      assert.equal(confirmed.payment?.balanceAfter, 46400);
+      assert.equal(state.balance, 26400);
+      assert.equal(state.receipts.length, 1);
+      const transfers = requests.filter(
+        (r) => r.url.pathname === "/v1/transfers",
+      );
+      assert.equal(transfers.length, 2);
+      assert.ok(
+        transfers.every(
+          (r) =>
+            r.headers.get("idempotency-key") === "stroy-gift-payment-unit-test",
+        ),
+      );
+      assert.equal(
+        requests.filter((r) => r.url.pathname === "/v1/balance").length,
+        2,
+        "retry reuses original balance check and only refreshes balance after confirmation",
+      );
+      await executePayment(uncertain, state);
+      assert.equal(state.balance, 26400);
+      assert.equal(transferCalls, 2);
+    },
+    (request) => {
+      if (request.url.pathname === "/v1/balance")
+        return balance(transferCalls ? 46400 : 50000);
+      transferCalls++;
+      return transferCalls === 1
+        ? response(
+            {
+              error: { type: "api_error", message: "Confirmation unavailable" },
+            },
+            500,
+          )
+        : transfer();
+    },
+  );
+});
+
+test("unexpected transfer confirmation details never mark the gift paid", async () => {
+  await sandbox(
+    async () => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.equal(state.balance, 30000);
+    },
+    (request) =>
+      request.url.pathname === "/v1/balance" ? balance(50000) : transfer(1),
+  );
+});
+
+test("explicit mock mode performs no Stripe request even when a test key exists", async () => {
+  await sandbox(
+    async (requests) => {
+      assert.equal(paymentProvider(), "mock");
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "paid");
+      assert.deepEqual(result.payment, {
+        provider: "mock",
+        status: "succeeded",
+      });
+      assert.equal(state.balance, 26400);
+      await executePayment(receipt(), state);
+      assert.equal(state.balance, 26400);
+      assert.equal(requests.length, 0);
+    },
+    undefined,
+    { PAYMENT_PROVIDER: "mock" },
+  );
+});
