@@ -14,6 +14,7 @@ export type Profile = {
   interests: string[];
 };
 export type Product = {
+  photo: string;
   id: string;
   name: string;
   merchant: string;
@@ -66,6 +67,7 @@ export const merchants = [
 export const catalog: Product[] = [
   {
     id: "coffee",
+    photo: "/images/coffee.jpg",
     name: "The origin discovery set",
     merchant: "Origin Studio",
     price: 3200,
@@ -79,6 +81,7 @@ export const catalog: Product[] = [
   },
   {
     id: "cups",
+    photo: "/images/cups.jpg",
     name: "Two cups, made slowly",
     merchant: "Still & Form",
     price: 4800,
@@ -92,6 +95,7 @@ export const catalog: Product[] = [
   },
   {
     id: "pottery",
+    photo: "/images/pottery.jpg",
     name: "An afternoon at the wheel",
     merchant: "Clay House",
     price: 8800,
@@ -105,6 +109,7 @@ export const catalog: Product[] = [
   },
   {
     id: "journal",
+    photo: "/images/journal.jpg",
     name: "Out of office, on paper",
     merchant: "Field Notes",
     price: 2400,
@@ -118,6 +123,7 @@ export const catalog: Product[] = [
   },
   {
     id: "flowers",
+    photo: "/images/flowers.jpg",
     name: "A season in stems",
     merchant: "Still & Form",
     price: 4200,
@@ -130,6 +136,7 @@ export const catalog: Product[] = [
   },
   {
     id: "grinder",
+    photo: "/images/grinder.jpg",
     name: "Precision coffee grinder",
     merchant: "Origin Studio",
     price: 5900,
@@ -142,6 +149,7 @@ export const catalog: Product[] = [
   },
   {
     id: "candle",
+    photo: "/images/candle.jpg",
     name: "Evening ritual candle",
     merchant: "Still & Form",
     price: 2800,
@@ -154,6 +162,7 @@ export const catalog: Product[] = [
   },
   {
     id: "camera",
+    photo: "/images/camera.jpg",
     name: "Pocket film camera",
     merchant: "Field Notes",
     price: 14500,
