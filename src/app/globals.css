@@ -2762,7 +2762,7 @@ em {
   margin: calc(var(--tile-size) * -0.35);
   animation: none;
   transform: rotate(calc(-1 * var(--tilt)))
-    scale(calc(0.8 - 0.3 * cos(calc(var(--angle) + var(--travel)))));
+    scale(calc(0.74 - 0.46 * cos(calc(var(--angle) + var(--travel)))));
 }
 .orbit-toggle:checked ~ .photo-ring .orbit-position {
   animation-play-state: paused;
@@ -2844,5 +2844,31 @@ em {
 @media (prefers-reduced-motion: reduce) {
   .orbit-position {
     animation: none !important;
+  }
+}
+
+/* A compact, quieter headline and a stronger sense of distance. */
+.landing-copy h1 {
+  font-family: var(--font-display), var(--sans);
+  font-size: 68px;
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -3.7px;
+}
+@media (max-width: 1100px) {
+  .landing-copy h1 {
+    font-size: 54px;
+    letter-spacing: -2.9px;
+  }
+}
+@media (max-width: 760px) {
+  .landing-copy h1 {
+    font-size: 33px;
+    letter-spacing: -1.8px;
+    line-height: 1.09;
+  }
+  .orbit-counter {
+    transform: rotate(calc(-1 * var(--tilt)))
+      scale(calc(0.775 - 0.425 * cos(calc(var(--angle) + var(--travel)))));
   }
 }
