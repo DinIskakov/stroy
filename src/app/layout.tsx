@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { DM_Sans, Cormorant_Garamond } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 const sans = DM_Sans({ variable: "--font-sans", subsets: ["latin"] });
-const serif = Cormorant_Garamond({
-  variable: "--font-serif",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-});
 export const metadata: Metadata = {
-  title: "stroy — The art of giving",
+  title: "stroy — A little more personal",
   description:
-    "Remember the little things. A thoughtful gifting concierge that finds the right gift and takes care of the details.",
+    "You know your people. stroy finds the gift. A thoughtful gift agent with live research, clear budgets, and your rules in mind.",
 };
 export default function RootLayout({
   children,
@@ -19,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    <html lang="en" className={sans.variable}>
       <body>{children}</body>
     </html>
   );
