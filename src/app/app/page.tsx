@@ -40,13 +40,7 @@ import {
 } from "@/lib/data";
 import { prepareProfile } from "@/lib/profile-schema";
 type View =
-  | "overview"
-  | "people"
-  | "occasions"
-  | "activity"
-  | "wallet"
-  | "settings"
-  | "catalog";
+  "overview" | "people" | "occasions" | "activity" | "wallet" | "settings";
 type ProgressEvent = {
   title: string;
   detail: string;
@@ -71,7 +65,6 @@ const stageIcons = {
 };
 const nav = [
   { id: "overview", label: "People", icon: Users },
-  { id: "catalog", label: "Demo catalog", icon: Gift },
   { id: "activity", label: "Activity", icon: History },
 ] as const;
 function ProductPhoto({
@@ -649,9 +642,7 @@ export default function Home() {
                       ? "Agent activity"
                       : view === "wallet"
                         ? "Wallet"
-                        : view === "catalog"
-                          ? "Demo catalog"
-                          : "Spending rules"}
+                        : "Spending rules"}
             </strong>
           </div>
           <div>
@@ -678,9 +669,7 @@ export default function Home() {
                         ? "Every decision, explained."
                         : view === "wallet"
                           ? "Your wallet."
-                          : view === "catalog"
-                            ? "A few good things."
-                            : "Your spending rules."}
+                          : "Your spending rules."}
               </h1>
               <p>
                 {view === "overview"
@@ -693,9 +682,7 @@ export default function Home() {
                         ? "See what your concierge considered, chose, and why."
                         : view === "wallet"
                           ? "Your gifting budget, with a clear story behind every pound."
-                          : view === "catalog"
-                            ? "Eight demo gifts, ready for simulated purchases."
-                            : "You set the limits. Your agent follows them."}
+                          : "You set the limits. Your agent follows them."}
               </p>
             </div>
             {["overview", "people", "occasions"].includes(view) && (
@@ -808,28 +795,6 @@ export default function Home() {
                   </b>
                 </button>
               </div>
-            </section>
-          )}
-          {view === "catalog" && (
-            <section className="catalog-grid" aria-label="Demo gift catalog">
-              {catalog.map((product) => (
-                <article className="catalog-card" key={product.id}>
-                  <ProductPhoto id={product.id} />
-                  <div>
-                    <span className="eyebrow">{product.merchant}</span>
-                    <h3>{product.name}</h3>
-                    <p>{product.description}</p>
-                    <div className="catalog-price">
-                      <strong>{money(product.price + product.shipping)}</strong>
-                      <span>incl. delivery · {product.days} days</span>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              <p className="catalog-caption">
-                Illustrative photography. Products and merchants are fictional;
-                purchases use your demo balance.
-              </p>
             </section>
           )}
           {view === "activity" && (
@@ -1298,7 +1263,7 @@ export default function Home() {
                     <h3 className="drawer-section-title">What’s out there</h3>
                     <p className="muted">
                       {result.research.status === "unavailable"
-                        ? "We couldn’t find live sources this time. The choices below use our demo catalog."
+                        ? "We couldn’t find live sources this time. The recommendations below use available gift selections."
                         : `Searched ${new Date(result.research.searchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}. Trends inspire ideas; your notes tell us what fits.`}
                     </p>
                     {result.research.status === "partial" && (
@@ -1412,9 +1377,7 @@ export default function Home() {
                     )}
                   </section>
                 )}
-                <h3 className="drawer-section-title">
-                  Ready for your demo wallet
-                </h3>
+                <h3 className="drawer-section-title">Selected for you</h3>
                 <div className="recommendations">
                   {result.recommendations.map((r, i) => {
                     const p = catalog.find((p) => p.id === r.productId)!;
@@ -1423,8 +1386,7 @@ export default function Home() {
                         <ProductPhoto id={p.id} />
                         <div>
                           <span className="eyebrow">
-                            {i === 0 ? "BEST MATCH" : "ANOTHER OPTION"} · DEMO
-                            CATALOG
+                            {i === 0 ? "SELECTED FOR YOU" : "ANOTHER THOUGHT"}
                           </span>
                           <h3>{p.name}</h3>
                           <span className="muted">{p.merchant}</span>
