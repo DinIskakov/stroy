@@ -10,6 +10,26 @@ function assertResearch(result: AgentResult, profileName: string) {
     research,
     `${profileName}: agent must research before recommending`,
   );
+  const expectWeb = process.env.TEST_RESEARCH_MODE
+    ? process.env.TEST_RESEARCH_MODE === "web"
+    : (process.env.TEST_BASE_URL || "").startsWith("https://");
+  if (!expectWeb) {
+    assert.equal(
+      research.status,
+      "catalog",
+      `${profileName}: localhost uses the demo catalog without Tavily`,
+    );
+    assert.deepEqual(research.queries, []);
+    assert.deepEqual(research.sources, []);
+    assert.deepEqual(research.insights, []);
+    assert.deepEqual(research.gifts, []);
+    assert.ok(result.recommendations.every((r) => !r.sourceIds?.length));
+    assert.ok(!result.receipt?.sourceUrls?.length);
+    console.log(
+      `PASS ${profileName}: local catalog mode, zero web queries or invented research`,
+    );
+    return;
+  }
   assert.ok(
     ["complete", "partial"].includes(research.status),
     `${profileName}: Tavily must return live sources, received ${research.status}`,
