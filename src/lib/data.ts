@@ -9,6 +9,8 @@ export type Profile = {
   date: string;
   budget: number;
   notes: string;
+  address?: string;
+  birthday?: string;
   dislikes: string[];
   owned: string[];
   interests: string[];
