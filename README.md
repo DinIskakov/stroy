@@ -2,6 +2,8 @@
 
 Live MVP: https://stroy-seven.vercel.app
 
+The landing page is at `/`; the gifting workspace is at `/app`. All eight demo catalog products have locally hosted photos in `public/images`, with Unsplash image IDs recorded in `credits.json`. These photos illustrate fictional demo products.
+
 A thoughtful gifting concierge built with Next.js, Vercel AI SDK, OpenAI, and Tavily. Includes an editable best friend (Alex) and girlfriend (Sophie), a fictional product catalog, a £300 mock wallet, approval flows, and an evidence-based decision log.
 
 ## Run locally
@@ -11,12 +13,12 @@ npm install
 npm run dev
 ```
 
-Create `.env.local` with `OPENAI_API_KEY`, `TAVILY_API_KEY`, and a random `WALLET_SECRET` (32+ characters). Optionally set `OPENAI_MODEL`; the default is `gpt-4.1-mini`. Keep these values server-side. Never commit secrets.
+Create `.env.local` with `OPENAI_API_KEY`, a random `WALLET_SECRET` (32+ characters), and `GIFT_RESEARCH_MODE=catalog`. Local development uses the eight demo gifts and makes no Tavily requests, even if a Tavily key is present. Vercel production uses `GIFT_RESEARCH_MODE=web` with server-side `OPENAI_API_KEY` and `TAVILY_API_KEY`. Optionally set `OPENAI_MODEL`; the default is `gpt-4.1-mini`. Keep these values server-side. Never commit secrets.
 
 ## Agent flow
 
 1. Read the recipient's notes and extract interests with evidence.
-2. Use `discoverGifts` to search Tavily for relevant trends and real gift ideas, with source URLs, while filtering the demo catalog through spending rules. Generic interest queries exclude recipient name tokens and contact details.
+2. Use `discoverGifts` to inspect the demo catalog locally. In production web mode it also searches Tavily for relevant trends and real gift ideas, with source URLs. Generic interest queries exclude recipient name tokens and contact details. Both modes filter mock purchases through spending rules.
 3. Use `presentShortlist` to record cited trends, real web gift ideas and eligible demo gifts. Live links are research-only; wallet purchases remain limited to approved demo catalog items.
 4. Use `purchaseGift` to attempt one mock purchase. Server code enforces spending rules independently of the model.
 5. Automatically purchase below the approval threshold, or queue explicit human approval. Approval rechecks budget, balance, merchant, delivery and duplicate-purchase rules.
@@ -31,6 +33,8 @@ npm run build
 npx tsx --test tests/policy.test.ts tests/research.test.ts
 # Requires the dev server and a valid OpenAI key; consumes a small amount of API credit:
 npx tsx tests/agent.integration.ts
+# Production verifies live Tavily research:
+TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 ```
 
 ## Demo boundaries
@@ -50,6 +54,8 @@ npx tsx tests/agent.integration.ts
 vercel link
 vercel env add OPENAI_API_KEY production
 vercel env add TAVILY_API_KEY production
+# Set this to web:
+vercel env add GIFT_RESEARCH_MODE production
 vercel env add WALLET_SECRET production
 vercel --prod
 ```

@@ -2,7 +2,70 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import axios, { type AxiosAdapter } from "axios";
 import { profiles } from "../src/lib/data";
-import { publicUrl, researchGifts, researchQueries } from "../src/lib/research";
+import {
+  publicUrl,
+  researchGifts,
+  researchMode,
+  researchQueries,
+} from "../src/lib/research";
+
+function restoreEnv(name: string, previous: string | undefined) {
+  if (previous === undefined) delete process.env[name];
+  else process.env[name] = previous;
+}
+
+test("research mode defaults to catalog locally and web only for Vercel production", () => {
+  const previousMode = process.env.GIFT_RESEARCH_MODE;
+  const previousVercel = process.env.VERCEL_ENV;
+  try {
+    delete process.env.GIFT_RESEARCH_MODE;
+    delete process.env.VERCEL_ENV;
+    assert.equal(researchMode(), "catalog");
+    process.env.VERCEL_ENV = "preview";
+    assert.equal(researchMode(), "catalog");
+    process.env.VERCEL_ENV = "production";
+    assert.equal(researchMode(), "web");
+    process.env.GIFT_RESEARCH_MODE = "catalog";
+    assert.equal(researchMode(), "catalog");
+    delete process.env.VERCEL_ENV;
+    process.env.GIFT_RESEARCH_MODE = "web";
+    assert.equal(researchMode(), "web");
+  } finally {
+    restoreEnv("GIFT_RESEARCH_MODE", previousMode);
+    restoreEnv("VERCEL_ENV", previousVercel);
+  }
+});
+
+test("local catalog mode makes zero Tavily requests even with an API key present", async () => {
+  const previousMode = process.env.GIFT_RESEARCH_MODE;
+  const previousVercel = process.env.VERCEL_ENV;
+  const previousKey = process.env.TAVILY_API_KEY;
+  const previousAdapter = axios.defaults.adapter;
+  let requests = 0;
+  delete process.env.GIFT_RESEARCH_MODE;
+  delete process.env.VERCEL_ENV;
+  process.env.TAVILY_API_KEY = "test-only-key";
+  axios.defaults.adapter = async () => {
+    requests++;
+    throw new Error("Network must not be called");
+  };
+  try {
+    const result = await researchGifts(profiles[0], [
+      { name: "Coffee", evidence: "Enjoys coffee", inferred: false },
+    ]);
+    assert.equal(result.status, "catalog");
+    assert.deepEqual(result.queries, []);
+    assert.deepEqual(result.sources, []);
+    assert.deepEqual(result.insights, []);
+    assert.deepEqual(result.gifts, []);
+    assert.equal(requests, 0);
+  } finally {
+    axios.defaults.adapter = previousAdapter;
+    restoreEnv("GIFT_RESEARCH_MODE", previousMode);
+    restoreEnv("VERCEL_ENV", previousVercel);
+    restoreEnv("TAVILY_API_KEY", previousKey);
+  }
+});
 
 test("research queries use interests and budget without recipient identity or contact details", () => {
   const queries = researchQueries(profiles[0], [
@@ -54,6 +117,8 @@ test("clickable research links require public HTTP(S) URLs", () => {
 
 test("missing Tavily key produces an honest unavailable result", async () => {
   const previous = process.env.TAVILY_API_KEY;
+  const previousMode = process.env.GIFT_RESEARCH_MODE;
+  process.env.GIFT_RESEARCH_MODE = "web";
   delete process.env.TAVILY_API_KEY;
   try {
     const result = await researchGifts(profiles[0], []);
@@ -64,6 +129,7 @@ test("missing Tavily key produces an honest unavailable result", async () => {
     assert.deepEqual(result.gifts, []);
     assert.ok(Number.isFinite(Date.parse(result.searchedAt)));
   } finally {
+    restoreEnv("GIFT_RESEARCH_MODE", previousMode);
     if (previous === undefined) delete process.env.TAVILY_API_KEY;
     else process.env.TAVILY_API_KEY = previous;
   }
@@ -71,12 +137,15 @@ test("missing Tavily key produces an honest unavailable result", async () => {
 
 async function withTavilyMock(adapter: AxiosAdapter, run: () => Promise<void>) {
   const previousKey = process.env.TAVILY_API_KEY;
+  const previousMode = process.env.GIFT_RESEARCH_MODE;
   const previousAdapter = axios.defaults.adapter;
   process.env.TAVILY_API_KEY = "test-only-key";
+  process.env.GIFT_RESEARCH_MODE = "web";
   axios.defaults.adapter = adapter;
   try {
     await run();
   } finally {
+    restoreEnv("GIFT_RESEARCH_MODE", previousMode);
     axios.defaults.adapter = previousAdapter;
     if (previousKey === undefined) delete process.env.TAVILY_API_KEY;
     else process.env.TAVILY_API_KEY = previousKey;

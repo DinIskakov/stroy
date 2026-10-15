@@ -10,7 +10,7 @@ export type ResearchSource = {
   publishedAt?: string;
 };
 export type Research = {
-  status: "complete" | "partial" | "unavailable";
+  status: "complete" | "partial" | "unavailable" | "catalog";
   searchedAt: string;
   queries: {
     kind: "trend" | "product";
@@ -87,6 +87,12 @@ export function researchQueries(profile: Profile, interests: Interest[]) {
   ];
 }
 
+export function researchMode(): "web" | "catalog" {
+  if (process.env.GIFT_RESEARCH_MODE === "catalog") return "catalog";
+  if (process.env.GIFT_RESEARCH_MODE === "web") return "web";
+  return process.env.VERCEL_ENV === "production" ? "web" : "catalog";
+}
+
 export async function researchGifts(
   profile: Profile,
   interests: Interest[],
@@ -99,6 +105,7 @@ export async function researchGifts(
     insights: [],
     gifts: [],
   };
+  if (researchMode() === "catalog") return { ...research, status: "catalog" };
   if (!process.env.TAVILY_API_KEY) return research;
   const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
   const queries = researchQueries(profile, interests);
@@ -123,7 +130,11 @@ export async function researchGifts(
     if (response.status !== "fulfilled") return;
     for (const source of response.value.results) {
       const url = publicUrl(source.url);
-      if (!url || research.sources.some((s) => s.url === url && s.kind === q.kind)) continue;
+      if (
+        !url ||
+        research.sources.some((s) => s.url === url && s.kind === q.kind)
+      )
+        continue;
       research.sources.push({
         id: `S${research.sources.length + 1}`,
         title: source.title.slice(0, 200),

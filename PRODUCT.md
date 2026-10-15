@@ -8,7 +8,11 @@ The problem: remembering an occasion is only the beginning. Choosing a relevant 
 
 This release is a working hackathon MVP for **Briefcase × Stripe — Track 01: Agents that Spend**. The live app is https://stroy-seven.vercel.app. Code is at https://github.com/DinIskakov/stroy; pushes to `main` automatically deploy to Vercel.
 
-**Current boundary:** AI decisions are real OpenAI calls through the Vercel AI SDK. Tavily web research is live and returns source-linked trend observations and gift ideas. The eight purchasable demo products, four demo merchants, prices, stock flags, delivery estimates, wallet and purchases are fictional. No real money moves. The hackathon requires a Stripe test-mode money movement in the demo; this mock version does not yet satisfy that requirement.
+**Current boundary:** AI decisions are real OpenAI calls through the Vercel AI SDK. Production uses live Tavily research and returns source-linked trend observations and gift ideas. Local development uses the demo catalog only and makes no Tavily requests. The eight purchasable demo products, four demo merchants, prices, stock flags, delivery estimates, wallet and purchases are fictional. No real money moves. The hackathon requires a Stripe test-mode money movement in the demo; this mock version does not yet satisfy that requirement.
+
+## Interface
+
+A simple blue landing page introduces stroy with a gently rotating ring of gift photography, inspired by the supplied reference. Its main action opens the workspace at `/app`. The workspace focuses on people, gift research, purchase decisions and spending rules. All eight demo products have local photos, so catalog imagery remains available during a local demo. Photos illustrate the fictional catalog and do not represent a verified real merchant listing. Motion respects reduced-motion settings.
 
 ## Product requirements and why they matter
 
@@ -47,7 +51,7 @@ The agent loop permits up to six generation steps and has a 85-second timeout. F
 
 Tavily search returns page snippets rather than fully reading every linked page. No direct profile scraping, social account access, or fetching URLs from notes is implemented. Source retrieval time is recorded; a page may still be stale. The app does not validate live checkout totals, stock or arrival estimates. Users must check seller details before buying externally.
 
-Each run allows one research call, with two parallel basic searches and 15-second timeouts. One failed search retains the successful results and marks research partial. Missing credentials, failures or no usable sources produce an unavailable state; the agent may continue using the demo catalog without claiming live findings.
+In production web mode, each run allows one research call, with two parallel basic searches and 15-second timeouts. Local catalog mode returns an explicit `catalog` status without making a Tavily request, even if its key is present. `GIFT_RESEARCH_MODE=catalog|web` selects the mode; without an override, Vercel production defaults to web and local development to catalog. Production has both API keys configured as server-side encrypted environment variables. One failed search retains the successful results and marks research partial. Missing credentials, failures or no usable sources produce an unavailable state; the agent may continue using the demo catalog without claiming live findings.
 
 Retrieved text is untrusted data and cannot authorize spending or change the policy. OpenAI still receives the full supplied profile for interpretation. Explicit dislikes and owned-item fields receive deterministic checks; preferences mentioned only in prose depend on model understanding.
 
@@ -88,7 +92,7 @@ The integration test used actual OpenAI tool calls and HTTP requests with a cook
 
 The Tavily extension was also tested locally with actual OpenAI and Tavily calls: Alex returned eight sources, two cited observations and one real gift idea; Sophie returned eight sources, three cited observations and three real gift ideas. The integration checks that every displayed citation and receipt source URL resolves to a source returned by Tavily. Counts vary by run. A browser test created a new profile, verified saved fields and the agent request, and rendered linked research using an intercepted response; that browser fixture did not call the providers.
 
-Seven Tavily unit tests cover generic-query privacy filtering, public HTTP(S) links, bounded source snippets, duplicate handling, missing credentials, partial failures and total failure. Seven deterministic policy tests additionally cover shipping totals, insufficient balance, hard budget limits even after approval, unavailable items, merchant restrictions, structured dislikes, ownership conflicts, late arrival, autopilot off, approval thresholds, duplicate occasions, and funds changing before approval.
+Nine Tavily unit tests cover mode selection, zero Tavily network calls in local catalog mode, generic-query privacy filtering, public HTTP(S) links, bounded source snippets, duplicate handling, missing credentials, partial failures and total failure. Seven deterministic policy tests additionally cover shipping totals, insufficient balance, hard budget limits even after approval, unavailable items, merchant restrictions, structured dislikes, ownership conflicts, late arrival, autopilot off, approval thresholds, duplicate occasions, and funds changing before approval.
 
 These runs demonstrate the checked paths; they do not guarantee that every model response will choose the same gift or correctly interpret every note. The integration test currently asserts the specific coffee and pottery choices, so alternative valid choices can cause a test failure.
 
