@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { ArrowUpRight, ArrowRight, Plus, Gift, Users, CalendarDays, Wallet as WalletIcon, SlidersHorizontal, Sparkles, Check, X, ChevronRight, ShieldCheck, LoaderCircle, Leaf, Pencil, CircleHelp, CheckCheck, History, Menu } from 'lucide-react';
 import { profiles as defaults, defaultPolicy, merchants, catalog, money, type Profile, type Policy, type Wallet, type AgentResult, type Receipt } from '@/lib/data';
 type View='overview'|'people'|'occasions'|'activity'|'wallet'|'settings';
@@ -13,6 +13,34 @@ export default function Home(){
  useEffect(()=>{async function initialize(){await Promise.resolve();try{const saved=localStorage.getItem('stroy-v1');if(saved){const s=JSON.parse(saved);if(s.people?.length)setPeople(s.people);if(s.policy)setPolicy(s.policy);if(s.results)setResults(s.results);}}catch{}fetch('/api/wallet').then(r=>r.json()).then(setWallet).catch(()=>setError('Could not load your wallet. Please refresh.'));setReady(true);}void initialize();},[]);
  useEffect(()=>{if(ready){try{localStorage.setItem('stroy-v1',JSON.stringify({people,policy,results}));}catch{}}},[people,policy,results,ready]);
  useEffect(()=>{if(!busy)return;const id=setInterval(()=>setProgress(v=>Math.min(v+1,3)),6500);return()=>clearInterval(id);},[busy]);
+ const activeDialog=help?'help':editing?'profile':showAgent?'agent':null;
+ const closeDialog=useEffectEvent(()=>{
+  if(busy)return;
+  if(help)setHelp(false);
+  else if(editing)setEditing(null);
+  else setShowAgent(false);
+ });
+ useEffect(()=>{
+  if(!activeDialog)return;
+  const dialogs=document.querySelectorAll<HTMLElement>('[role="dialog"]');
+  const dialog=dialogs[dialogs.length-1];
+  if(!dialog)return;
+  const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  const focusable=()=>Array.from(dialog.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, summary, [tabindex]')).filter(el=>el.tabIndex>=0&&!el.matches(':disabled')&&el.getClientRects().length>0);
+  dialog.tabIndex=-1;
+  (focusable()[0]||dialog).focus();
+  function onKeyDown(event:KeyboardEvent){
+   if(event.key==='Escape'){event.preventDefault();closeDialog();return;}
+   if(event.key!=='Tab')return;
+   const items=focusable();
+   const first=items[0];const last=items[items.length-1];
+   if(!first){event.preventDefault();dialog.focus();return;}
+   if(event.shiftKey&&(document.activeElement===first||!items.includes(document.activeElement as HTMLElement))){event.preventDefault();last.focus();}
+   else if(!event.shiftKey&&(document.activeElement===last||!items.includes(document.activeElement as HTMLElement))){event.preventDefault();first.focus();}
+  }
+  document.addEventListener('keydown',onKeyDown);
+  return()=>{document.removeEventListener('keydown',onKeyDown);previous?.focus();};
+ },[activeDialog]);
  const current=people.find(p=>p.id===selected)||people[0];const result=results[current?.id];const pending=wallet.receipts.filter(r=>r.status==='pending');const paid=wallet.receipts.filter(r=>r.status==='paid');
  async function run(profile:Profile){if(busy)return;setSelected(profile.id);setShowAgent(true);setBusy(true);setProgress(0);setError('');try{const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'run',profile,policy})});const data=await res.json();if(!res.ok)throw new Error(data.error);setResults(old=>({...old,[profile.id]:data.result}));setWallet(data.wallet);}catch(e){setError(e instanceof Error?e.message:'Something went wrong. Please try again.');}finally{setBusy(false);}}
  async function decide(receipt:Receipt,action:'approve'|'decline'){if(busy)return;setBusy(true);setError('');try{const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,receiptId:receipt.id})});const data=await res.json();if(!res.ok)throw new Error(data.error);setWallet(data.wallet);setResults(old=>{const r=old[receipt.profileId];return r?{...old,[receipt.profileId]:{...r,receipt:data.receipt,summary:action==='approve'?'Approved by you, taken care of by stroy. Your mock purchase is complete.':'Gift declined. Your wallet balance is unchanged.'}}:old;});}catch(e){setError(e instanceof Error?e.message:'Could not update this purchase.');}finally{setBusy(false);}}
