@@ -290,6 +290,32 @@ test("rejected Stripe transfer never marks a gift paid or debits wallet funds", 
   );
 });
 
+test("an inactive Stripe merchant explains verification and preserves funds", async () => {
+  await sandbox(
+    async () => {
+      const state = wallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.match(result.payment?.error || "", /verification/);
+      assert.equal(state.balance, 30000);
+      assert.equal(state.receipts[0].status, "failed");
+    },
+    (request) =>
+      request.url.pathname === "/v1/balance"
+        ? balance(50000)
+        : response(
+            {
+              error: {
+                type: "invalid_request_error",
+                code: "insufficient_capabilities_for_transfer",
+                message: "Transfers are inactive",
+              },
+            },
+            400,
+          ),
+  );
+});
+
 test("ambiguous confirmation retries the same idempotency key and debits once when confirmed", async () => {
   let transferCalls = 0;
   await sandbox(
@@ -363,6 +389,8 @@ test("explicit mock mode performs no Stripe request even when a test key exists"
       assert.deepEqual(result.payment, {
         provider: "mock",
         status: "succeeded",
+        balanceBefore: 30000,
+        balanceAfter: 26400,
       });
       assert.equal(state.balance, 26400);
       await executePayment(receipt(), state);

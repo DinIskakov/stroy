@@ -176,9 +176,12 @@ export async function executePayment(
     const message =
       error instanceof Error && /Insufficient GBP/.test(error.message)
         ? error.message
-        : ambiguous
-          ? "Stripe confirmation is delayed. Check this payment again; it uses the same transaction key."
-          : "Stripe sandbox transfer failed. No gift has been marked paid.";
+        : error instanceof Stripe.errors.StripeInvalidRequestError &&
+            error.code === "insufficient_capabilities_for_transfer"
+          ? "Stripe has not activated transfers for this demo merchant. Complete its Stripe verification. No funds were deducted."
+          : ambiguous
+            ? "Stripe confirmation is delayed. Check this payment again; it uses the same transaction key."
+            : "Stripe sandbox transfer failed. No gift has been marked paid.";
     return settle(
       {
         ...receipt,

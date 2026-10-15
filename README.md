@@ -41,6 +41,8 @@ With `PAYMENT_PROVIDER=stripe`, a valid server-side `STRIPE_SECRET_KEY` (`sk_tes
 node scripts/setup-stripe-sandbox.mjs
 ```
 
+Stripe-managed recipients must finish hosted verification before their `transfers` capability becomes active. The setup uses Stripe’s passing test identity values: **1 January 1902** and phone **0000000000**. If an older recipient failed identity verification, correct it through Stripe’s hosted form; Stripe locks API identity edits after onboarding.
+
 The wallet shows **spending allowance** separately from the actual **Stripe sandbox balance**. Receipts show the transfer ID, Stripe Dashboard link, destination, and available platform balance before/after when retrievable. Failed payments are not labelled paid. An ambiguous result remains processing; **Check payment** retries confirmation using the same transaction idempotency key. Allowance is deducted only once a payment is confirmed. No live money or real merchant checkout is involved.
 
 ## Cognee memory

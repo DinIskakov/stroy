@@ -68,7 +68,13 @@ for (const account of existing.data) {
 }
 let account =
   candidates.find((a) => a.capabilities?.transfers === "active") ||
-  candidates.find((a) => a.controller?.stripe_dashboard?.type === "none");
+  candidates.find(
+    (a) =>
+      a.controller?.stripe_dashboard?.type === "none" &&
+      !a.requirements?.errors?.some((error) =>
+        error.code.startsWith("verification_failed"),
+      ),
+  );
 if (!account) {
   const created = await stripe.v2.core.accounts.create(
     {
@@ -117,7 +123,7 @@ if (!account) {
       },
       metadata: { stroy_demo: "true", platform: platform.id },
     },
-    { idempotencyKey: `stroy-shared-recipient-v1-${platform.id}` },
+    { idempotencyKey: `stroy-shared-recipient-test-1902-v2-${platform.id}` },
   );
   account = await stripe.accounts.retrieve(created.id);
   console.log("Shared test recipient created:", account.id);
