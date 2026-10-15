@@ -427,7 +427,7 @@ export default function Home() {
                   data.receipt?.status === "paid"
                     ? data.receipt.payment?.provider === "stripe"
                       ? "Your Stripe sandbox payment is confirmed. The receipt records the transaction and policy checks."
-                      : "Your mock purchase is complete."
+                      : "Your demo payment went through. Your gift is confirmed."
                     : data.receipt?.status === "processing"
                       ? "Payment confirmation is pending. Check payment status before trying another purchase."
                       : data.receipt?.status === "failed"
@@ -474,7 +474,7 @@ export default function Home() {
           {r.status === "paid"
             ? r.payment?.provider === "stripe"
               ? `Stripe sandbox ${r.payment.type === "transfer" ? "transfer" : "payment"} complete`
-              : "Mock purchase complete"
+              : "Payment complete"
             : r.status === "pending"
               ? "Needs your approval"
               : r.status === "processing"
@@ -499,6 +499,27 @@ export default function Home() {
               {rule}
             </span>
           ))}
+        </div>
+      )}
+      {r.payment?.provider === "mock" && r.status === "paid" && (
+        <div className="stripe-payment succeeded">
+          <div className="stripe-payment-heading">
+            <CreditCard size={14} />
+            <strong>Stripe payment demo</strong>
+            <span>SIMULATED</span>
+          </div>
+          <p>Your payment went through. Your gift is confirmed.</p>
+          {typeof r.payment.balanceBefore === "number" &&
+            typeof r.payment.balanceAfter === "number" && (
+              <div className="stripe-balance-change">
+                <span>Demo balance</span>
+                <strong>
+                  {money(r.payment.balanceBefore)}
+                  <ArrowRight size={12} />
+                  {money(r.payment.balanceAfter)}
+                </strong>
+              </div>
+            )}
         </div>
       )}
       {r.payment?.provider === "stripe" && (
@@ -714,8 +735,7 @@ export default function Home() {
             )}
           </div>
           <p role="status">
-            {memoryStatus ||
-              "People and their details save automatically."}
+            {memoryStatus || "People and their details save automatically."}
           </p>
           {error && (
             <div role="alert" className="error-banner">

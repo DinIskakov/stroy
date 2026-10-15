@@ -74,7 +74,12 @@ export async function executePayment(
       {
         ...receipt,
         status: "paid",
-        payment: { provider: "mock", status: "succeeded" },
+        payment: {
+          provider: "mock",
+          status: "succeeded",
+          balanceBefore: wallet.balance,
+          balanceAfter: wallet.balance - receipt.total,
+        },
       },
       wallet,
     );

@@ -101,7 +101,10 @@ export async function POST(request: Request) {
         );
         if (result.receipt?.status === "processing") {
           emit?.({
-            title: "Sending the sandbox payment",
+            title:
+              paymentProvider() === "stripe"
+                ? "Sending the sandbox payment"
+                : "Completing your payment",
             detail:
               "Rechecking funds and paying only the approved test merchant.",
             kind: "info",
@@ -114,7 +117,7 @@ export async function POST(request: Request) {
           result.summary = paid
             ? result.receipt.payment?.provider === "stripe"
               ? "Your gift is paid in the Stripe sandbox. The transfer and balance change are recorded below."
-              : "Your demo gift is paid. The simulated spending allowance has been updated."
+              : "Your demo payment went through. Your gift is confirmed and your balance has been updated."
             : result.receipt.payment?.error ||
               "Payment is not confirmed. No gift has been marked paid.";
           const event: ProgressEvent = {

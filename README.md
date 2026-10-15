@@ -17,6 +17,8 @@ npm run dev
 
 The example selects `GIFT_RESEARCH_MODE=catalog`, `PAYMENT_PROVIDER=mock`, and `COGNEE_ENABLED=false` for a local demo. Local gift research uses eight pictured gift selections without Tavily calls. Cognee is disabled locally unless `COGNEE_ENABLED=true` is explicitly set. `OPENAI_MODEL` defaults to `gpt-4.1-mini`.
 
+In local mock mode, a successful run shows **Payment complete** with a **Stripe payment demo / SIMULATED** receipt and the demo balance before and after. It makes no Stripe requests and does not invent a Stripe transaction ID.
+
 Images are served locally: catalog product illustrations are in `public/images/products`; landing photos are in `public/images`. Live web gift cards also include a matching illustration labelled **Illustrative photo**. These are not verified photographs of a seller’s listing. See the image credit files in those directories.
 
 ## What the agent does

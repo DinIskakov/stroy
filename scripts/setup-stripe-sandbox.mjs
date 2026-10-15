@@ -81,7 +81,7 @@ if (!account) {
         individual: {
           given_name: "Jenny",
           surname: "Rosen",
-          date_of_birth: { day: 1, month: 1, year: 1990 },
+          date_of_birth: { day: 1, month: 1, year: 1902 },
           address: {
             line1: "address_full_match",
             city: "London",
@@ -89,7 +89,7 @@ if (!account) {
             country: "gb",
           },
           email: "stroy-demo@example.com",
-          phone: "+447911123456",
+          phone: "0000000000",
         },
       },
       defaults: {
@@ -106,7 +106,7 @@ if (!account) {
       configuration: {
         merchant: {
           mcc: "5999",
-          support: { phone: "+447911123456" },
+          support: { phone: "0000000000" },
           capabilities: { card_payments: { requested: true } },
         },
         recipient: {
