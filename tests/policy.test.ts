@@ -34,3 +34,32 @@ test('pending purchase leaves funds intact; paid receipt prevents another occasi
  receipt.status='paid';settle(receipt,state);assert.equal(state.balance,26400);assert.equal(state.receipts.length,1);
  assert.match(checkPolicy(coffee,profile,defaultPolicy,state).reason,/P6/);
 });
+
+test('deterministic Alex and Sophie flow: automatic gift then approved experience', () => {
+ const state=wallet();
+ const alex={...profiles[0],date:'2099-11-08'};
+ const sophie={...profiles[1],date:'2099-11-14'};
+ const pottery=catalog.find(p=>p.id==='pottery')!;
+ const alexCheck=checkPolicy(coffee,alex,defaultPolicy,state);
+ assert.equal(alexCheck.allowed,true);assert.equal(alexCheck.approval,false);
+ const alexReceipt:Receipt={id:'alex-gift',profileId:alex.id,name:alex.name,productId:coffee.id,total:alexCheck.total,reason:'Discovery coffee matches stated interest',evidence:'wanting to try beans from different origins',rules:alexCheck.rules,at:new Date().toISOString(),status:'paid',policy:defaultPolicy,budget:alex.budget,date:alex.date};
+ settle(alexReceipt,state);assert.equal(state.balance,26400);
+ const sophieCheck=checkPolicy(pottery,sophie,defaultPolicy,state);
+ assert.equal(sophieCheck.allowed,true);assert.equal(sophieCheck.approval,true);
+ const sophieReceipt:Receipt={id:'sophie-gift',profileId:sophie.id,name:sophie.name,productId:pottery.id,total:sophieCheck.total,reason:'A shared pottery experience',evidence:'would love to try a pottery class together',rules:sophieCheck.rules,at:new Date().toISOString(),status:'pending',policy:defaultPolicy,budget:sophie.budget,date:sophie.date};
+ settle(sophieReceipt,state);assert.equal(state.balance,26400);
+ const approved=checkPolicy(pottery,sophie,defaultPolicy,state,true);
+ assert.equal(approved.allowed,true);assert.equal(approved.approval,false);
+ sophieReceipt.status='paid';sophieReceipt.rules=approved.rules;settle(sophieReceipt,state);
+ assert.equal(state.balance,17600);assert.equal(state.receipts.length,2);
+ assert.equal(checkPolicy(pottery,sophie,defaultPolicy,state,true).allowed,false);
+});
+
+test('approval rechecks funds and rejects a gift when balance has fallen', () => {
+ const sophie={...profiles[1],date:'2099-11-14'};
+ const pottery=catalog.find(p=>p.id==='pottery')!;
+ assert.equal(checkPolicy(pottery,sophie,defaultPolicy,wallet()).approval,true);
+ const state={...wallet(),balance:8700};
+ const approval=checkPolicy(pottery,sophie,defaultPolicy,state,true);
+ assert.equal(approval.allowed,false);assert.match(approval.reason,/P4/);assert.equal(state.balance,8700);
+});
