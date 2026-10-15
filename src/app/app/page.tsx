@@ -963,7 +963,10 @@ export default function Home() {
         </main>
       </div>
       {showAgent && (
-        <div className="overlay" onClick={() => !busy && setShowAgent(false)}>
+        <div
+          className="overlay concierge-overlay"
+          onClick={() => !busy && setShowAgent(false)}
+        >
           <section
             className="agent-drawer"
             role="dialog"
