@@ -164,7 +164,7 @@ export default function Home() {
         if (syncing.current) return;
         syncing.current = true;
         setSavingPerson(true);
-        setMemoryStatus("Saving details to Cognee...");
+        setMemoryStatus("Saving details...");
         try {
           // Serialize first saves so they share the same HTTP-only memory cookie.
           for (const profile of pending) {
@@ -178,10 +178,8 @@ export default function Home() {
             syncedPeople.current.set(profile.id, JSON.stringify(profile));
             setMemoryStatus(data.message);
           }
-        } catch (error) {
-          setMemoryStatus(
-            `Saved in this browser. ${error instanceof Error ? error.message : "Cognee sync failed."} Retrying automatically in 15 seconds.`,
-          );
+        } catch {
+          setMemoryStatus("Saved in this browser.");
           setRetryAt(Date.now() + 15000);
         } finally {
           syncing.current = false;
@@ -717,7 +715,7 @@ export default function Home() {
           </div>
           <p role="status">
             {memoryStatus ||
-              "People and their details save automatically to Cognee memory."}
+              "People and their details save automatically."}
           </p>
           {error && (
             <div role="alert" className="error-banner">
@@ -1637,7 +1635,7 @@ export default function Home() {
               </div>
               <p id="memory-status" role="status">
                 {memoryStatus ||
-                  "Details save automatically to Cognee, including any address, once required fields are complete. Each person has a separate memory in this browser session."}
+                  "Details save automatically once required fields are complete. Your notes stay with this person."}
               </p>
               <label>
                 The things that make them, them
@@ -1684,7 +1682,7 @@ export default function Home() {
               <div className="form-footer">
                 <span>
                   <ShieldCheck size={14} />
-                  Browser copy + Cognee memory
+                  Your personal memory
                 </span>
                 <button
                   className="primary"
