@@ -42,7 +42,9 @@ export function checkPolicy(
       (x) =>
         x.profileId === profile.id &&
         x.date === profile.date &&
-        x.status === "paid",
+        x.status === "paid" &&
+        (wallet.paymentProvider !== "stripe" ||
+          x.payment?.provider === "stripe"),
     )
   )
     return fail("P6 · A gift has already been purchased for this occasion.");

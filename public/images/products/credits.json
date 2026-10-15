@@ -1,0 +1,50 @@
+{
+  "coffee": {
+    "image": "https://static.wixstatic.com/media/6be466_18534f338a054133bd62248c0a18eec5~mv2.png/v1/fill/w_800,h_800,al_c,q_85/6be466_18534f338a054133bd62248c0a18eec5~mv2.png",
+    "source": "https://www.crack-cafes.fr/product-page/coffret-decouverte-cafes-de-specialite",
+    "credit": "Crack Caf\u00e9s",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "cups": {
+    "image": "https://keramik-kartell.de/uploads/c/paar-grosse-blaue-tassen-3.jpg",
+    "source": "https://keramik-kartell.de/artikel/zwei-handgefertigte-keramik-tassen-tassenpaar-in-blau-hangedreht/",
+    "credit": "Keramik Kartell",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "journal": {
+    "image": "https://kakimori.com/cdn/shop/files/P1722856.jpg?v=1697612820&width=1000",
+    "source": "https://kakimori.com/en/products/k23njnaaw134",
+    "credit": "Kakimori",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "flowers": {
+    "image": "https://bloommagicflowers.ie/cdn/shop/files/Malibu_XL_top_MEI07200_600x.jpg?v=1754599953",
+    "source": "https://bloommagicflowers.ie/products/malibu-blooms-hand-tied",
+    "credit": "Bloom Magic",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "grinder": {
+    "image": "https://content.rozetka.com.ua/goods/images/big/511082723.jpg",
+    "source": "https://rozetka.com.ua/ua/584875447/p584875447/",
+    "credit": "1Zpresso / Rozetka",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "candle": {
+    "image": "https://abeliacandles.com/cdn/shop/files/BRE4.jpg?v=1748296314&width=1100",
+    "source": "https://abeliacandles.com/products/releve-apothecary-candle-coastal-calm-botanical-uplift-10-oz-soy-wax",
+    "credit": "Abelia Candle",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "camera": {
+    "image": "https://retrospekt.com/cdn/shop/files/RC-VR-1570_3.jpg?v=1687987594",
+    "source": "https://retrospekt.com/products/asanuma-pocket-100-110-format-film-camera",
+    "credit": "Retrospekt",
+    "use": "Illustrative example photograph; not an exact listing for the fictional demo merchant."
+  },
+  "pottery": {
+    "image": "https://images.unsplash.com/photo-1493106641515-6b5631de4bb9",
+    "source": "https://unsplash.com",
+    "credit": "Unsplash",
+    "use": "Illustrative pottery workshop photograph."
+  }
+}

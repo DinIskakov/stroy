@@ -13,7 +13,7 @@ import {
 } from "./data";
 import { researchGifts, researchMode } from "./research";
 import { checkPolicy, settle } from "./policy";
-import { recallPerson, personDataset } from "./cognee";
+import { recallPerson, personDataset, cogneeEnabled } from "./cognee";
 export async function runAgent(
   profile: Profile,
   policy: Policy,
@@ -53,7 +53,7 @@ export async function runAgent(
     `Considering ${profile.name}’s notes, ${profile.occasion.toLowerCase()}, and ${money(profile.budget)} budget.`,
   );
   let memory: unknown = null;
-  if (memoryScope && process.env.COGNEE_API_KEY) {
+  if (memoryScope && cogneeEnabled()) {
     try {
       memory = await recallPerson(
         personDataset(memoryScope, profile.id),

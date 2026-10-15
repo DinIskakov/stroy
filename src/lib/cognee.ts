@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto";
 import type { Profile } from "./data";
 
+export function cogneeEnabled() {
+  return (
+    process.env.COGNEE_ENABLED === "true" ||
+    (process.env.COGNEE_ENABLED !== "false" &&
+      process.env.VERCEL_ENV === "production" &&
+      Boolean(process.env.COGNEE_API_KEY))
+  );
+}
+
 export function personDataset(scope: string, profileId: string) {
   return `stroy_${createHash("sha256").update(`${scope}:${profileId}`).digest("hex")}`;
 }

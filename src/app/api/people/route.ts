@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { profileSchema } from "@/lib/profile-schema";
-import { personDataset, rememberPerson, recallPerson } from "@/lib/cognee";
+import {
+  personDataset,
+  rememberPerson,
+  recallPerson,
+  cogneeEnabled,
+} from "@/lib/cognee";
 import { memoryScope } from "@/lib/memory-session";
 
 export const maxDuration = 60;
@@ -36,6 +41,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     const body = parsed.data;
+    if (!cogneeEnabled())
+      return Response.json(
+        body.action === "save"
+          ? { message: "Saved in this browser.", local: true }
+          : { memory: null, local: true },
+      );
     const scope = await memoryScope(body.action === "save");
     if (!scope)
       return Response.json(

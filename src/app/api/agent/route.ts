@@ -10,7 +10,7 @@ import {
   type AgentResult,
 } from "@/lib/data";
 import { checkPolicy } from "@/lib/policy";
-import { executePayment, paymentInfo } from "@/lib/payments";
+import { executePayment, paymentInfo, paymentProvider } from "@/lib/payments";
 export const maxDuration = 180;
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       );
     const body = parsed.data;
     const wallet = await readWallet();
+    wallet.paymentProvider = paymentProvider();
     if (body.action === "run") {
       if (!process.env.OPENAI_API_KEY)
         return Response.json(

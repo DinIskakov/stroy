@@ -1,5 +1,13 @@
-process.on('uncaughtException',error=>{console.error(error.message);process.exit(1);});
-process.on('unhandledRejection',error=>{console.error(error instanceof Error?error.message:'Sandbox setup failed.');process.exit(1);});
+process.on("uncaughtException", (error) => {
+  console.error(error.message);
+  process.exit(1);
+});
+process.on("unhandledRejection", (error) => {
+  console.error(
+    error instanceof Error ? error.message : "Sandbox setup failed.",
+  );
+  process.exit(1);
+});
 import { readFileSync, writeFileSync } from "node:fs";
 import Stripe from "stripe";
 process.loadEnvFile(".env.local");
@@ -45,7 +53,7 @@ for (const name of names) {
         },
       },
       configuration: {
-        merchant: {capabilities:{card_payments:{requested:true}}},
+        merchant: { capabilities: { card_payments: { requested: true } } },
         recipient: {
           capabilities: {
             stripe_balance: { stripe_transfers: { requested: true } },
@@ -70,16 +78,20 @@ for (const name of names) {
 const balance = await request("balance");
 console.log("Available sandbox funds:", balance.available);
 if (!balance.available.some((b) => b.currency === "gbp" && b.amount >= 30000)) {
-  const topup = await request(
-    "topups",
+  const payment = await stripe.paymentIntents.create(
     {
-      amount: "30000",
+      amount: 31000,
       currency: "gbp",
-      source: "btok_us_verified",
+      payment_method: "pm_card_bypassPendingInternational",
+      confirm: true,
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
       description: "stroy sandbox demo funding",
     },
-    "stroy-sandbox-initial-funding-v1",
+    { idempotencyKey: "stroy-sandbox-gbp-funding-v1" },
   );
-  console.log("Sandbox top-up:", topup.id, topup.status);
+  console.log("Sandbox funding payment:", payment.id, payment.status);
+  console.log(
+    "Funding becomes available shortly; Stripe test processing fees apply.",
+  );
 }
 console.log("Setup complete. No live funds or actual gift orders.");
