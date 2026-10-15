@@ -12,7 +12,7 @@ This release is a working hackathon MVP for **Briefcase × Stripe — Track 01: 
 
 ## Interface
 
-A simple blue landing page introduces stroy with a gently rotating ring of gift photography, inspired by the supplied reference. Its main action opens the workspace at `/app`. The workspace focuses on people, gift research, purchase decisions and spending rules. All eight demo products have local photos, so catalog imagery remains available during a local demo. Photos illustrate the fictional catalog and do not represent a verified real merchant listing. Motion respects reduced-motion settings.
+A blue landing page introduces stroy with the original serif wordmark and twelve gift photos moving along a tilted elliptical path, inspired by the supplied reference. All photos stay within the visible hero throughout the motion. Scrollable sections explain the workflow, recipient examples, research, spending controls and common questions. Its main action opens the workspace at `/app`. The workspace focuses on people, gift research, purchase decisions and spending rules. All eight demo products have local photos, so catalog imagery remains available during a local demo. Photos illustrate the fictional catalog and do not represent a verified real merchant listing. Motion respects reduced-motion settings.
 
 ## Product requirements and why they matter
 
@@ -108,8 +108,8 @@ TEST_BASE_URL=https://stroy-seven.vercel.app npx tsx tests/agent.integration.ts
 
 ## Implementation and MVP limits
 
-- **App and server:** Next.js App Router, React, TypeScript, Tailwind CSS, Vercel AI SDK, OpenAI, Zod, and Tavily (`@tavily/core`). No FastAPI service, Supabase database, or Cognee integration is currently used.
-- **Persistence:** Browser localStorage holds profiles, settings and agent results. A compressed, signed, HTTP-only cookie holds wallet state and six recent receipts for up to seven days. This is a per-browser demo, not a shared account.
+- **App and server:** Next.js App Router, React, TypeScript, Tailwind CSS, Vercel AI SDK, OpenAI, Zod, and Tavily (`@tavily/core`). Cognee profile autosave and memory retrieval are integrated when configured. No FastAPI service or Supabase database is currently used.
+- **Persistence:** Browser localStorage holds profiles, settings and agent results. When Cognee is configured, profile edits additionally save timestamped snapshots to a per-person dataset scoped by a browser memory cookie; gift runs can retrieve that memory. A compressed, signed, HTTP-only cookie holds wallet state and six recent receipts for up to seven days. This is a per-browser demo, not a shared account.
 - **Ledger limits:** Signing detects cookie modification, but does not prevent replay, simultaneous requests using the same balance snapshot, or a reset by clearing cookies. Duplicate detection is limited to retained receipts. This is not ready to control real funds.
 - **Evidence limits:** The model is asked to quote the profile, but code does not validate quote fidelity. The activity view records application events, not a complete provider transcript or hidden model reasoning. P1 availability is enforced but is not currently appended as a successful receipt rule.
 - **Run cap:** Twenty completed agent runs per wallet session. This is a demo cap rather than a durable public rate limit.
