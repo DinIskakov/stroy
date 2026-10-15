@@ -70,20 +70,43 @@ const nav = [
 function ProductPhoto({
   id = "coffee",
   className = "",
+  illustrative = false,
 }: {
   id?: string;
   className?: string;
+  illustrative?: boolean;
 }) {
   const product = catalog.find((p) => p.id === id) || catalog[0];
   return (
     <div className={`product-photo ${className}`}>
       <Image
         src={product.photo}
-        alt={product.name}
+        alt={
+          illustrative
+            ? `Illustrative photograph: ${product.name}`
+            : product.name
+        }
         fill
         sizes="(max-width: 600px) 45vw, 320px"
       />
     </div>
+  );
+}
+function giftIllustration(name: string, reason: string) {
+  const categories: [RegExp, string][] = [
+    [/grinder|grinding/i, "grinder"],
+    [/pottery|workshop|wheel|ceramic class/i, "pottery"],
+    [/mug|cups?|stoneware|ceramic/i, "cups"],
+    [/coffee|beans?|roast|tasting|pour.over|espresso/i, "coffee"],
+    [/flower|bouquet|floral/i, "flowers"],
+    [/candle|scent|fragrance/i, "candle"],
+    [/camera|film|lens/i, "camera"],
+    [/journal|notebook|book|outdoor|walk|travel/i, "journal"],
+  ];
+  return (
+    categories.find(([pattern]) => pattern.test(name))?.[1] ||
+    categories.find(([pattern]) => pattern.test(reason))?.[1] ||
+    "cups"
   );
 }
 function dateLabel(date: string) {
@@ -1314,28 +1337,40 @@ export default function Home() {
                             if (!source) return null;
                             return (
                               <article key={`${gift.sourceId}-${i}`}>
-                                <span className="eyebrow">
-                                  LIVE WEB FIND · RESEARCH ONLY
-                                </span>
-                                <h3>{gift.name}</h3>
-                                <p>{gift.reason}</p>
-                                <a
-                                  className="text-button"
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  Explore{" "}
-                                  {new URL(source.url).hostname.replace(
-                                    /^www\./,
-                                    "",
-                                  )}{" "}
-                                  <ArrowUpRight size={14} />
-                                </a>
-                                <small>
-                                  Check the seller’s current price, stock and
-                                  delivery.
-                                </small>
+                                <div className="web-gift-preview">
+                                  <ProductPhoto
+                                    id={giftIllustration(
+                                      gift.name,
+                                      gift.reason,
+                                    )}
+                                    illustrative
+                                  />
+                                  <span>Illustrative photo</span>
+                                </div>
+                                <div className="web-gift-copy">
+                                  <span className="eyebrow">
+                                    LIVE WEB FIND · RESEARCH ONLY
+                                  </span>
+                                  <h3>{gift.name}</h3>
+                                  <p>{gift.reason}</p>
+                                  <a
+                                    className="text-button"
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Explore{" "}
+                                    {new URL(source.url).hostname.replace(
+                                      /^www\./,
+                                      "",
+                                    )}{" "}
+                                    <ArrowUpRight size={14} />
+                                  </a>
+                                  <small>
+                                    Check the seller’s current price, stock and
+                                    delivery.
+                                  </small>
+                                </div>
                               </article>
                             );
                           })}

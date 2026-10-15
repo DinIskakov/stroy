@@ -3544,3 +3544,41 @@ em {
     font-size: 10px;
   }
 }
+.agent-drawer .web-gifts article {
+  padding: 0;
+  overflow: hidden;
+}
+.web-gift-preview {
+  position: relative;
+  height: 175px;
+  background: #edf2fa;
+}
+.web-gift-preview > .product-photo {
+  height: 100%;
+  width: 100%;
+}
+.web-gift-preview > span {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  background: #fffffff0;
+  border: 1px solid #e3eafa;
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 7px;
+  color: #8094b4;
+}
+.web-gift-copy {
+  padding: 17px;
+}
+.web-gift-preview img {
+  object-fit: cover;
+}
+@media (max-width: 480px) {
+  .web-gift-preview {
+    height: 165px;
+  }
+  .web-gift-copy {
+    padding: 15px;
+  }
+}
