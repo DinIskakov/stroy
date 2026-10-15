@@ -106,7 +106,9 @@ export async function POST(request: Request) {
                 ? "Sending the sandbox payment"
                 : "Completing your payment",
             detail:
-              "Rechecking funds and paying only the approved test merchant.",
+              process.env.STRIPE_PAYMENT_FLOW === "payout"
+                ? "Sending the approved amount out of the sandbox to its configured test bank."
+                : "Rechecking funds and paying only the approved test merchant.",
             kind: "info",
             stage: "payment",
           });
@@ -116,16 +118,30 @@ export async function POST(request: Request) {
           const paid = result.receipt.status === "paid";
           result.summary = paid
             ? result.receipt.payment?.provider === "stripe"
-              ? "Your gift is paid in the Stripe sandbox. The transfer and balance change are recorded below."
+              ? result.receipt.payment.type === "payout"
+                ? "Your outgoing Stripe sandbox payout is paid. The balance change is recorded below."
+                : "Your gift is paid in the Stripe sandbox. The transfer and balance change are recorded below."
               : "Your demo payment went through. Your gift is confirmed and your balance has been updated."
-            : result.receipt.payment?.error ||
-              "Payment is not confirmed. No gift has been marked paid.";
+            : result.receipt.payment?.type === "payout" &&
+                result.receipt.status === "processing" &&
+                result.receipt.payment.allowanceDebited
+              ? "Your outgoing Stripe sandbox payout is submitted. The spending allowance is reserved while Stripe completes the test-bank payout."
+              : result.receipt.payment?.error ||
+                "Payment is not confirmed. No gift has been marked paid.";
+          const submittedPayout =
+            result.receipt.payment?.type === "payout" &&
+            result.receipt.payment.allowanceDebited &&
+            result.receipt.status === "processing";
           const event: ProgressEvent = {
-            title: paid ? "Payment confirmed" : "Payment needs attention",
+            title: paid
+              ? "Payment confirmed"
+              : submittedPayout
+                ? "Sandbox payout submitted"
+                : "Payment needs attention",
             detail: paid
-              ? `${result.receipt.payment?.provider === "stripe" ? "Stripe sandbox transfer" : "Demo payment"} completed.`
+              ? `${result.receipt.payment?.provider === "stripe" ? (result.receipt.payment.type === "payout" ? "Stripe sandbox payout" : "Stripe sandbox transfer") : "Demo payment"} completed.`
               : result.summary,
-            kind: paid ? "success" : "warning",
+            kind: paid || submittedPayout ? "success" : "warning",
             stage: "payment",
           };
           result.trace.push(event);
@@ -222,7 +238,9 @@ export async function POST(request: Request) {
       product,
       profile,
       receipt.policy,
-      wallet,
+      receipt.payment?.allowanceDebited
+        ? { ...wallet, balance: wallet.balance + receipt.total }
+        : wallet,
       body.action === "approve" || Boolean(receipt.approvedAt),
     );
     if (!check.allowed || check.approval)

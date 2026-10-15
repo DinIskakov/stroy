@@ -76,6 +76,7 @@ async function sandbox(
 ) {
   const values: Record<string, string | undefined> = {
     PAYMENT_PROVIDER: "stripe",
+    STRIPE_PAYMENT_FLOW: "transfer",
     STRIPE_SECRET_KEY: "sk_test_unit_test_only",
     STRIPE_MERCHANT_ACCOUNTS: JSON.stringify({
       [coffee.merchant]: destination,
@@ -399,5 +400,326 @@ test("explicit mock mode performs no Stripe request even when a test key exists"
     },
     undefined,
     { PAYMENT_PROVIDER: "mock" },
+  );
+});
+
+const payoutWallet = (): Wallet => ({ balance: 34600, receipts: [], runs: 0 });
+const payoutDestination = "ba_TestBank123";
+const payoutEnvironment = {
+  STRIPE_PAYMENT_FLOW: "payout",
+  STRIPE_PAYOUT_DESTINATION: payoutDestination,
+  STRIPE_MERCHANT_ACCOUNTS: "{}",
+};
+function payoutResponse(overrides: Record<string, unknown> = {}) {
+  return response({
+    id: "po_TestGift123",
+    object: "payout",
+    type: "bank_account",
+    balance_transaction: "txn_TestDebit123",
+    status: "paid",
+    livemode: false,
+    amount: 3600,
+    currency: "gbp",
+    destination: payoutDestination,
+    metadata: { stroy_decision_id: "payment-unit-test" },
+    ...overrides,
+  });
+}
+function payoutHandler(
+  options: {
+    result?: Record<string, unknown>;
+    failFirst?: boolean;
+    decline?: boolean;
+    funds?: number;
+  } = {},
+) {
+  let submitted = false;
+  let postCount = 0;
+  return (request: CapturedRequest) => {
+    if (request.url.pathname === "/v1/balance")
+      return balance(options.funds ?? (submitted ? 46400 : 50000));
+    assert.ok(
+      request.url.pathname.startsWith("/v1/payouts"),
+      "payout mode never calls Connect or PaymentIntents",
+    );
+    if (request.init.method === "POST") {
+      submitted = true;
+      postCount++;
+      if (options.decline)
+        return response(
+          {
+            error: {
+              type: "invalid_request_error",
+              code: "balance_insufficient",
+              message: "Payout failed",
+            },
+          },
+          400,
+        );
+      if (options.failFirst && postCount === 1)
+        return response(
+          { error: { type: "api_error", message: "Confirmation delayed" } },
+          500,
+        );
+    }
+    return payoutResponse(options.result);
+  };
+}
+
+test("sandbox payout sends canonical funds out and debits allowance only once", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = payoutWallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "paid");
+      assert.equal(result.payment?.provider, "stripe");
+      assert.equal(result.payment?.type, "payout");
+      assert.equal(result.payment?.id, "po_TestGift123");
+      assert.equal(result.payment?.status, "succeeded");
+      assert.equal(result.payment?.allowanceBefore, 34600);
+      assert.equal(result.payment?.allowanceAfter, 31000);
+      assert.equal(result.payment?.balanceBefore, 50000);
+      assert.equal(result.payment?.balanceAfter, 46400);
+      assert.equal(result.payment?.destination, payoutDestination);
+      assert.equal(state.balance, 31000);
+      const post = requests.find((r) => r.init.method === "POST")!;
+      assert.equal(post.url.href, "https://api.stripe.com/v1/payouts");
+      assert.equal(post.body.get("amount"), "3600");
+      assert.equal(post.body.get("currency"), "gbp");
+      assert.equal(post.body.get("destination"), payoutDestination);
+      assert.equal(
+        post.body.get("metadata[stroy_decision_id]"),
+        "payment-unit-test",
+      );
+      assert.equal(
+        post.headers.get("idempotency-key"),
+        "stroy-payout-gift-payment-unit-test",
+      );
+      assert.equal(
+        requests.filter(
+          (r) => r.url.pathname === "/v1/payouts" && r.init.method === "POST",
+        ).length,
+        1,
+      );
+      assert.ok(
+        requests.some(
+          (r) =>
+            r.url.pathname === "/v1/payouts/po_TestGift123" &&
+            r.init.method === "GET",
+        ),
+      );
+      const requestCount = requests.length;
+      const repeated = await executePayment(receipt(), state);
+      assert.equal(repeated, result);
+      assert.equal(state.balance, 31000);
+      assert.equal(requests.length, requestCount);
+    },
+    payoutHandler(),
+    payoutEnvironment,
+  );
+});
+
+test("sandbox payout rejects an invalid server configured bank destination", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = payoutWallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.equal(state.balance, 34600);
+      assert.equal(requests.length, 0);
+    },
+    undefined,
+    {
+      ...payoutEnvironment,
+      STRIPE_PAYOUT_DESTINATION: "untrusted-destination",
+    },
+  );
+});
+
+test("rejected sandbox payout never marks paid or deducts allowance", async () => {
+  await sandbox(
+    async () => {
+      const state = payoutWallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "failed");
+      assert.equal(result.payment?.status, "failed");
+      assert.equal(state.balance, 34600);
+    },
+    payoutHandler({ decline: true }),
+    payoutEnvironment,
+  );
+});
+
+test("sandbox payout success must match amount, currency, destination, decision and test mode", async () => {
+  for (const mismatch of [
+    { amount: 1 },
+    { currency: "usd" },
+    { destination: "ba_UnapprovedBank" },
+    { livemode: true },
+    { metadata: { stroy_decision_id: "another-decision" } },
+  ]) {
+    await sandbox(
+      async () => {
+        const state = payoutWallet();
+        const result = await executePayment(receipt(), state);
+        assert.notEqual(result.status, "paid", JSON.stringify(mismatch));
+        assert.equal(state.balance, 34600);
+      },
+      payoutHandler({ result: mismatch }),
+      payoutEnvironment,
+    );
+  }
+});
+
+test("pending and in-transit payouts reserve spending allowance as funds leave Stripe", async () => {
+  for (const status of ["pending", "in_transit"]) {
+    await sandbox(
+      async () => {
+        const state = payoutWallet();
+        const result = await executePayment(receipt(), state);
+        assert.equal(result.status, "processing");
+        assert.equal(result.payment?.status, "processing");
+        assert.equal(result.payment?.allowanceDebited, true);
+        assert.equal(state.balance, 31000);
+        await executePayment(receipt(), state);
+        assert.equal(
+          state.balance,
+          31000,
+          "replaying the original decision does not reserve allowance twice",
+        );
+      },
+      payoutHandler({ result: { status } }),
+      payoutEnvironment,
+    );
+  }
+});
+
+test("failed and canceled payouts leave spending allowance intact", async () => {
+  for (const status of ["failed", "canceled"]) {
+    await sandbox(
+      async () => {
+        const state = payoutWallet();
+        const result = await executePayment(receipt(), state);
+        assert.equal(result.status, "failed");
+        assert.equal(state.balance, 34600);
+      },
+      payoutHandler({ result: { status } }),
+      payoutEnvironment,
+    );
+  }
+});
+
+test("ambiguous payout failure retries with its stable key and debits once on confirmation", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = payoutWallet();
+      const uncertain = await executePayment(receipt(), state);
+      assert.equal(uncertain.status, "processing");
+      assert.equal(state.balance, 34600);
+      const confirmed = await executePayment(uncertain, state);
+      assert.equal(confirmed.status, "paid");
+      assert.equal(state.balance, 31000);
+      const posts = requests.filter((r) => r.init.method === "POST");
+      assert.equal(posts.length, 2);
+      assert.ok(
+        posts.every(
+          (r) =>
+            r.headers.get("idempotency-key") ===
+            "stroy-payout-gift-payment-unit-test",
+        ),
+      );
+      const requestCount = requests.length;
+      await executePayment(uncertain, state);
+      assert.equal(requests.length, requestCount);
+      assert.equal(state.balance, 31000);
+      assert.equal(state.receipts.length, 1);
+    },
+    payoutHandler({ failFirst: true }),
+    payoutEnvironment,
+  );
+});
+
+test("a known pending payout keeps its provider and flow when environment settings change", async () => {
+  let confirmed = false;
+  const handler = payoutHandler();
+  await sandbox(
+    async (requests) => {
+      const state = payoutWallet();
+      const uncertain = await executePayment(receipt(), state);
+      assert.equal(uncertain.status, "processing");
+      assert.equal(uncertain.payment?.id, "po_TestGift123");
+      assert.equal(state.balance, 31000);
+      process.env.PAYMENT_PROVIDER = "mock";
+      process.env.STRIPE_PAYMENT_FLOW = "transfer";
+      confirmed = true;
+      const paid = await executePayment(uncertain, state);
+      assert.equal(paid.status, "paid");
+      assert.equal(paid.payment?.provider, "stripe");
+      assert.equal(paid.payment?.type, "payout");
+      assert.equal(state.balance, 31000);
+      assert.equal(
+        requests.filter((r) => r.init.method === "POST").length,
+        1,
+        "known payout is retrieved on retry, never paid a second time",
+      );
+    },
+    (request) => {
+      const result = handler(request);
+      return request.url.pathname.startsWith("/v1/payouts") && !confirmed
+        ? payoutResponse({ status: "pending" })
+        : result;
+    },
+    payoutEnvironment,
+  );
+});
+
+test("a failed or canceled payout releases its allowance reservation exactly once", async () => {
+  for (const terminalStatus of ["failed", "canceled"]) {
+    let status = "pending";
+    const handler = payoutHandler();
+    await sandbox(
+      async () => {
+        const state = payoutWallet();
+        const pending = await executePayment(receipt(), state);
+        assert.equal(pending.status, "processing");
+        assert.equal(state.balance, 31000);
+        status = terminalStatus;
+        const failed = await executePayment(pending, state);
+        assert.equal(failed.status, "failed");
+        assert.equal(state.balance, 34600);
+        await executePayment(failed, state);
+        assert.equal(state.balance, 34600);
+        await executePayment(pending, state);
+        assert.equal(
+          state.balance,
+          34600,
+          "a stale pending receipt cannot release the same reservation twice",
+        );
+      },
+      (request) => {
+        const result = handler(request);
+        return request.url.pathname.startsWith("/v1/payouts")
+          ? payoutResponse({ status })
+          : result;
+      },
+      payoutEnvironment,
+    );
+  }
+});
+
+test("payout mode may use the platform's default sandbox GBP bank", async () => {
+  await sandbox(
+    async (requests) => {
+      const state = payoutWallet();
+      const result = await executePayment(receipt(), state);
+      assert.equal(result.status, "paid");
+      assert.equal(state.balance, 31000);
+      assert.equal(
+        requests.find((r) => r.init.method === "POST")?.body.has("destination"),
+        false,
+      );
+    },
+    payoutHandler(),
+    { ...payoutEnvironment, STRIPE_PAYOUT_DESTINATION: undefined },
   );
 });
