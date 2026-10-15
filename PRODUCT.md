@@ -1,6 +1,8 @@
-# GiftPilot — AI Gift Concierge
+# stroy — AI Gift Concierge
 
 An AI-powered gifting assistant that understands the people in your life, discovers thoughtful gifts, and helps you buy them on time. Built for the **Briefcase × Stripe hackathon** (Track 01: Agents that Spend).
+
+> Current MVP: OpenAI + Vercel AI SDK, a fictional product catalog, and a £300 mock wallet. Stripe payments, live product search, and email reminders are future integrations.
 
 ## How it works
 

@@ -1,5 +1,7 @@
 # stroy — The art of giving
 
+Live MVP: https://stroy-seven.vercel.app
+
 A thoughtful gifting concierge built with Next.js, Vercel AI SDK, and OpenAI. Includes an editable best friend (Alex) and girlfriend (Sophie), a fictional product catalog, a £300 mock wallet, approval flows, and an evidence-based decision log.
 
 ## Run locally
