@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { DM_Sans, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 const sans = DM_Sans({ variable: "--font-sans", subsets: ["latin"] });
+const brand = Cormorant_Garamond({
+  variable: "--font-brand",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
 export const metadata: Metadata = {
   title: "stroy — A little more personal",
   description:
@@ -13,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang="en" className={`${sans.variable} ${brand.variable}`}>
       <body>{children}</body>
     </html>
   );

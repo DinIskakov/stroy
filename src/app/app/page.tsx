@@ -405,7 +405,7 @@ export default function Home() {
     <div className="app-shell">
       <aside className={`sidebar ${mobile ? "mobile-open" : ""}`}>
         <Link href="/" className="wordmark">
-          stroy<span>↗</span>
+          stroy<span>✳</span>
         </Link>
         <nav>
           {nav.map((n) => (
@@ -877,7 +877,7 @@ export default function Home() {
           )}
           <footer>
             <Link href="/" className="footer-brand">
-              stroy ↗
+              stroy ✳
             </Link>
             <span>Thoughtfully chosen. Clearly explained.</span>
             <span>Demo · no real money moves</span>
