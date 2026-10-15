@@ -1,3 +1,4 @@
+import type { Research } from "./research";
 export type Profile = {
   id: string;
   name: string;
@@ -186,12 +187,14 @@ export type Trace = {
   kind: "info" | "success" | "warning";
 };
 export type Recommendation = {
+  sourceIds?: string[];
   productId: string;
   reason: string;
   evidence: string;
   score: number;
 };
 export type Receipt = {
+  sourceUrls?: string[];
   id: string;
   profileId: string;
   name: string;
@@ -208,6 +211,7 @@ export type Receipt = {
 };
 export type Wallet = { balance: number; receipts: Receipt[]; runs: number };
 export type AgentResult = {
+  research?: Research;
   summary: string;
   interests: { name: string; evidence: string; inferred: boolean }[];
   recommendations: Recommendation[];

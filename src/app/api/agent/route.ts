@@ -3,7 +3,7 @@ import { runAgent } from "@/lib/agent";
 import { readWallet, saveWallet } from "@/lib/wallet";
 import { catalog, type Profile } from "@/lib/data";
 import { checkPolicy, settle } from "@/lib/policy";
-export const maxDuration = 90;
+export const maxDuration = 120;
 const profileSchema = z.object({
   id: z.string().max(80),
   name: z.string().min(1).max(80),
