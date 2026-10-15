@@ -8,9 +8,23 @@ function secret() {
   if (!s) throw new Error("Wallet signing secret is not configured.");
   return s;
 }
-export async function readWallet(): Promise<Wallet> {
-  const value = (await cookies()).get("stroy-wallet")?.value;
-  if (!value) return initial();
+export function encodeWallet(wallet: Wallet) {
+  const compact = {
+    ...wallet,
+    receipts: wallet.receipts
+      .slice(0, 6)
+      .map((r) => ({
+        ...r,
+        reason: r.reason.slice(0, 200),
+        evidence: r.evidence.slice(0, 120),
+      })),
+  };
+  const payload = deflateSync(Buffer.from(JSON.stringify(compact))).toString(
+    "base64url",
+  );
+  return `${payload}.${createHmac("sha256", secret()).update(payload).digest("base64url")}`;
+}
+export function decodeWallet(value: string): Wallet | undefined {
   try {
     const [payload, signature] = value.split(".");
     const expected = createHmac("sha256", secret())
@@ -20,32 +34,22 @@ export async function readWallet(): Promise<Wallet> {
       signature.length !== expected.length ||
       !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
     )
-      return initial();
+      return;
     return JSON.parse(
-      inflateSync(Buffer.from(payload, "base64url")).toString(),
+      inflateSync(Buffer.from(payload, "base64url"), {
+        maxOutputLength: 64000,
+      }).toString(),
     );
   } catch {
-    return initial();
+    return;
   }
 }
+export async function readWallet(): Promise<Wallet> {
+  const value = (await cookies()).get("stroy-wallet")?.value;
+  return value ? decodeWallet(value) || initial() : initial();
+}
 export async function saveWallet(wallet: Wallet) {
-  // Keep the cookie compact; full decision receipts are also returned to the UI.
-  const compact = {
-    ...wallet,
-    receipts: wallet.receipts.slice(0, 6).map((r) => ({
-      ...r,
-      reason: r.reason.slice(0, 200),
-      evidence: r.evidence.slice(0, 120),
-      policy: { ...r.policy, allowedMerchants: r.policy.allowedMerchants },
-    })),
-  };
-  const payload = deflateSync(Buffer.from(JSON.stringify(compact))).toString(
-    "base64url",
-  );
-  const signature = createHmac("sha256", secret())
-    .update(payload)
-    .digest("base64url");
-  (await cookies()).set("stroy-wallet", `${payload}.${signature}`, {
+  (await cookies()).set("stroy-wallet", encodeWallet(wallet), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",

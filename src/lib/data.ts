@@ -69,7 +69,7 @@ export const merchants = [
 export const catalog: Product[] = [
   {
     id: "coffee",
-    photo: "/images/coffee.jpg",
+    photo: "/images/products/coffee.jpg",
     name: "The origin discovery set",
     merchant: "Origin Studio",
     price: 3200,
@@ -83,7 +83,7 @@ export const catalog: Product[] = [
   },
   {
     id: "cups",
-    photo: "/images/cups.jpg",
+    photo: "/images/products/cups.jpg",
     name: "Two cups, made slowly",
     merchant: "Still & Form",
     price: 4800,
@@ -97,7 +97,7 @@ export const catalog: Product[] = [
   },
   {
     id: "pottery",
-    photo: "/images/pottery.jpg",
+    photo: "/images/products/pottery.jpg",
     name: "An afternoon at the wheel",
     merchant: "Clay House",
     price: 8800,
@@ -111,7 +111,7 @@ export const catalog: Product[] = [
   },
   {
     id: "journal",
-    photo: "/images/journal.jpg",
+    photo: "/images/products/journal.jpg",
     name: "Out of office, on paper",
     merchant: "Field Notes",
     price: 2400,
@@ -125,7 +125,7 @@ export const catalog: Product[] = [
   },
   {
     id: "flowers",
-    photo: "/images/flowers.jpg",
+    photo: "/images/products/flowers.jpg",
     name: "A season in stems",
     merchant: "Still & Form",
     price: 4200,
@@ -138,7 +138,7 @@ export const catalog: Product[] = [
   },
   {
     id: "grinder",
-    photo: "/images/grinder.jpg",
+    photo: "/images/products/grinder.jpg",
     name: "Precision coffee grinder",
     merchant: "Origin Studio",
     price: 5900,
@@ -151,7 +151,7 @@ export const catalog: Product[] = [
   },
   {
     id: "candle",
-    photo: "/images/candle.jpg",
+    photo: "/images/products/candle.jpg",
     name: "Evening ritual candle",
     merchant: "Still & Form",
     price: 2800,
@@ -164,7 +164,7 @@ export const catalog: Product[] = [
   },
   {
     id: "camera",
-    photo: "/images/camera.jpg",
+    photo: "/images/products/camera.jpg",
     name: "Pocket film camera",
     merchant: "Field Notes",
     price: 14500,
@@ -204,7 +204,29 @@ export type Recommendation = {
   evidence: string;
   score: number;
 };
+export type Payment = {
+  provider: "mock" | "stripe";
+  type?: "transfer" | "payment_intent";
+  id?: string;
+  status: "succeeded" | "processing" | "failed";
+  balanceBefore?: number;
+  balanceAfter?: number;
+  destination?: string;
+  error?: string;
+};
+export type AgentStage =
+  | "profile"
+  | "memory"
+  | "research"
+  | "shortlist"
+  | "policy"
+  | "payment"
+  | "complete";
+export type ProgressEvent = Trace & { stage: AgentStage };
 export type Receipt = {
+  payment?: Payment;
+  approvedAt?: string;
+  preferences?: { dislikes: string[]; owned: string[] };
   sourceUrls?: string[];
   id: string;
   profileId: string;
@@ -215,12 +237,19 @@ export type Receipt = {
   evidence: string;
   rules: string[];
   at: string;
-  status: "paid" | "pending" | "declined";
+  status: "paid" | "pending" | "declined" | "processing" | "failed";
   policy: Policy;
   budget: number;
   date: string;
 };
-export type Wallet = { balance: number; receipts: Receipt[]; runs: number };
+export type Wallet = {
+  balance: number;
+  receipts: Receipt[];
+  runs: number;
+  paymentProvider?: "mock" | "stripe";
+  stripeBalance?: number;
+  stripeConfigured?: boolean;
+};
 export type AgentResult = {
   research?: Research;
   summary: string;

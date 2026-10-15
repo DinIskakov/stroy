@@ -96,6 +96,7 @@ export function researchMode(): "web" | "catalog" {
 export async function researchGifts(
   profile: Profile,
   interests: Interest[],
+  onSearch?: (title: string, detail: string) => void,
 ): Promise<Research> {
   const research: Research = {
     status: "unavailable",
@@ -110,16 +111,22 @@ export async function researchGifts(
   const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
   const queries = researchQueries(profile, interests);
   const results = await Promise.allSettled(
-    queries.map((q) =>
-      client.search(q.query, {
+    queries.map((q) => {
+      onSearch?.(
+        q.kind === "trend"
+          ? "Searching for recent trends"
+          : "Searching for gift ideas",
+        q.query,
+      );
+      return client.search(q.query, {
         searchDepth: "basic",
         maxResults: 4,
         includeAnswer: false,
         includeRawContent: false,
         ...(q.kind === "trend" ? { timeRange: "year" as const } : {}),
         timeout: 15,
-      }),
-    ),
+      });
+    }),
   );
   results.forEach((response, index) => {
     const q = queries[index];
@@ -127,7 +134,14 @@ export async function researchGifts(
       ...q,
       status: response.status === "fulfilled" ? "ok" : "failed",
     });
-    if (response.status !== "fulfilled") return;
+    if (response.status !== "fulfilled") {
+      onSearch?.("Search could not finish", q.query);
+      return;
+    }
+    onSearch?.(
+      q.kind === "trend" ? "Trend sources found" : "Gift sources found",
+      `${response.value.results.length} results for “${q.query}”`,
+    );
     for (const source of response.value.results) {
       const url = publicUrl(source.url);
       if (
